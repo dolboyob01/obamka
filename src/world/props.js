@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { M, boxGeo, flatPlane, tint } from './batch.js';
+import { buildMagma, buildKrasnoe } from './shops.js';
 
 // Возвращает { boxes:[...], carousel: {x,z} | null, lamps:[{x,z}] }
 export function buildCourtyard(batch, rng, size, tight = false) {
@@ -141,6 +142,11 @@ export function buildTundra(batch, rng, size) {
       boxes.push({ x0: x, y0: 0, z0: z, x1: x + 4, y1: 1.5, z1: z + 1.7 });
     }
   }
+  if (rng.chance(0.22)) {
+    const sx = rng.range(4, size - 20), sz = rng.range(4, size - 14);
+    const shop = rng.chance(0.5) ? buildMagma : buildKrasnoe;
+    boxes.push(...shop(batch, sx, sz, sx + 13, sz + 9, rng.pick(['s', 'n', 'w', 'e'])).boxes);
+  }
   // иногда — гаражи-ракушки
   if (rng.chance(0.4)) {
     const gx = rng.range(4, size - 20), gz = rng.range(4, size - 8);
@@ -171,13 +177,13 @@ export function buildStreet(batch, rng, size) {
       boxes.push({ x0: x - 0.12, y0: 0, z0: z - 0.12, x1: x + 0.12, y1: 5.6, z1: z + 0.12 });
     }
   }
-  if (rng.chance(0.55)) {
-    const kx = rng.range(8, size - 12), kz = c + (rng.chance(0.5) ? 8 : -10);
-    batch.add(boxGeo(kx, 0, kz, kx + 3.2, 2.2, kz + 2.4, rng.pick([0x6a3a3a, 0x3a4a5a, 0x4a4a3a])), M.CONCRETE);
-    const roof = new THREE.CylinderGeometry(2.1, 2.1, 0.18, 10);
-    roof.translate(kx + 1.6, 2.3, kz + 1.2);
-    batch.add(tint(roof, 0x5a3a2a), M.DARK);
-    boxes.push({ x0: kx, y0: 0, z0: kz, x1: kx + 3.2, y1: 2.2, z1: kz + 2.4 });
+  if (rng.chance(0.72)) {
+    const north = rng.chance(0.5);
+    const kx = rng.range(6, size - 20);
+    const kz = north ? c + 8.2 : c - 16.5;
+    const front = north ? 's' : 'n';
+    const shop = rng.chance(0.5) ? buildMagma : buildKrasnoe;
+    boxes.push(...shop(batch, kx, kz, kx + 13, kz + 8.5, front).boxes);
   }
   const t = buildTundra(batch, rng, size);
   boxes.push(...t.boxes.filter(b => b.z0 > c + 7 || b.z1 < c - 7));

@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ПОДЪЕЗД</title>
   <style>
+    @font-face {
+      font-family: "Black Dread";
+      src: url("%BASE_URL%fonts/BlackDread-RpxPV.otf") format("opentype");
+      font-display: swap;
+    }
     html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font-family: "Lucida Console", "Courier New", monospace; color: #c8c8c0; user-select: none; }
     canvas#game { display: block; width: 100vw; height: 100vh; }
     #ui { position: fixed; inset: 0; pointer-events: none; }
@@ -51,6 +56,15 @@
     #choice .btn { font-size: 22px; padding: 16px 36px; }
     #choice .timer { font-size: 40px; color: #c8c8c0; margin: 10px; }
     #start h1 { font-size: 80px; }
+    #start .brand {
+      font-family: "Black Dread", serif;
+      font-size: 86px;
+      line-height: .9;
+      color: #8b0000;
+      letter-spacing: 4px;
+      margin: 0 0 10px;
+      text-shadow: 0 3px 0 #2a0000, 0 0 22px rgba(90, 0, 0, .85);
+    }
     #gameover h1 { color: #a01010; }
     .fade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity .4s; }
   </style>
@@ -72,6 +86,7 @@
     <div class="fade" id="fade"></div>
 
     <div id="start" class="overlay show">
+      <div class="brand">obamka</div>
       <h1>ПОДЪЕЗД</h1>
       <h2>тундра. панельки. бесконечность.</h2>
       <p>Твоя задача — заминировать подъезды. Бомба закладывается просто: присядь в углу любого подъезда и сделай своё дело.</p>

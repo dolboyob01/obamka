@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import * as BGU from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 // Индексы материалов, общие для всех чанков/интерьеров
-export const M = { FACADE: 0, CONCRETE: 1, ROOF: 2, DOOR: 3, MOSAIC: 4, LAMP: 5, DARK: 6, WALLINT: 7, FLOORINT: 8, CEILINT: 9, ELEVATOR: 10, GROUND: 11, ARENA: 12 };
+export const M = { FACADE: 0, CONCRETE: 1, ROOF: 2, DOOR: 3, MOSAIC: 4, LAMP: 5, DARK: 6, WALLINT: 7, FLOORINT: 8, CEILINT: 9, ELEVATOR: 10, GROUND: 11, ARENA: 12, SIGN_MAGMA: 13, SIGN_KIK: 14 };
 
 export function makeMaterials(T) {
   const lam = (map, extra = {}) => new THREE.MeshLambertMaterial({ map, vertexColors: true, ...extra });
@@ -20,6 +20,8 @@ export function makeMaterials(T) {
   mats[M.ELEVATOR] = lam(T.elevator);
   mats[M.GROUND] = lam(T.ground);
   mats[M.ARENA] = lam(T.arenaFloor);
+  mats[M.SIGN_MAGMA] = new THREE.MeshBasicMaterial({ map: T.signMagma });
+  mats[M.SIGN_KIK] = new THREE.MeshBasicMaterial({ map: T.signKik });
   return mats;
 }
 

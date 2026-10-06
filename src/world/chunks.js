@@ -4,6 +4,7 @@ import { hash2, Rng } from '../rng.js';
 import { Batch, M, flatPlane } from './batch.js';
 import { designBuilding, buildBuildingGeometry, buildRubbleGeometry, buildingBoxes } from './buildings.js';
 import { buildCourtyard, buildTundra, buildStreet, makeCarouselRotor, makeSwingSeat } from './props.js';
+import { buildMagma, buildKrasnoe } from './shops.js';
 
 export class OutdoorWorld {
   constructor(scene, materials, statics, textures) {
@@ -144,6 +145,14 @@ export class OutdoorWorld {
     } else if (type === 'courtyard') {
       const r = buildCourtyard(batch, rng, S, false);
       boxes = r.boxes;
+      if (cx === 0 && cz === 0) {
+        boxes.push(...buildMagma(batch, 5, 8, 20.5, 18.2, 'n').boxes);
+        boxes.push(...buildKrasnoe(batch, 26.5, 8.2, 43, 17.6, 'n').boxes);
+      } else if (rng.chance(0.55)) {
+        const shop = rng.chance(0.5) ? buildMagma : buildKrasnoe;
+        const x0 = rng.range(4, 8);
+        boxes.push(...shop(batch, x0, 2, x0 + 13, 11, rng.pick(['s', 'n'])).boxes);
+      }
       const cw = this.toWorld(cx, cz, 0, r.carousel.x, r.carousel.z);
       const rotor = makeCarouselRotor(); rotor.position.set(cw.x, 0, cw.z);
       chunk.carousel = { rotor, x: cw.x, z: cw.z, squeak: Math.random() * 3 };

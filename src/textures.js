@@ -2,11 +2,11 @@ import * as THREE from 'three';
 import { Rng } from './rng.js';
 
 // Все текстуры генерируются на canvas в низком разрешении — ничего не грузится с диска.
-function canvasTex(size, draw, repeat = true) {
+function canvasTex(size, draw, repeat = true, w, h) {
   const c = document.createElement('canvas');
-  c.width = size; c.height = size;
+  c.width = w || size; c.height = h || size;
   const ctx = c.getContext('2d');
-  draw(ctx, size);
+  draw(ctx, c.width, c.height);
   const t = new THREE.CanvasTexture(c);
   t.magFilter = THREE.NearestFilter;
   t.minFilter = THREE.NearestFilter;
@@ -130,6 +130,41 @@ export function makeTextures() {
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
     for (let i = 0; i < s; i += 32) { ctx.fillRect(i, 0, 1, s); ctx.fillRect(0, i, s, 1); }
   });
+
+  // Вывеска «Магма» — пародия на красный «Магнит»: красное поле, белая «М», название
+  T.signMagma = canvasTex(64, (ctx, w, h) => {
+    ctx.fillStyle = '#c41018';
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    for (let i = 0; i < 18; i++) ctx.fillRect(rng.int(0, w), rng.int(0, h), rng.int(2, 16), 1);
+    ctx.fillStyle = '#f4f0ea';
+    ctx.beginPath(); ctx.arc(h * 0.52, h * 0.5, h * 0.36, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#c41018';
+    ctx.font = `900 ${Math.floor(h * 0.52)}px Arial, sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('М', h * 0.52, h * 0.54);
+    ctx.fillStyle = '#fff8f2';
+    ctx.font = `800 ${Math.floor(h * 0.46)}px Arial, sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.fillText('МАГМА', h * 1.05, h * 0.54);
+  }, false, 512, 128);
+
+  // Вывеска «Красное и Коричневое» — красно-коричневые плашки как у КиБ
+  T.signKik = canvasTex(64, (ctx, w, h) => {
+    ctx.fillStyle = '#b81414'; ctx.fillRect(0, 0, w * 0.48, h);
+    ctx.fillStyle = '#5a3218'; ctx.fillRect(w * 0.48, 0, w * 0.52, h);
+    ctx.fillStyle = '#1a0c08'; ctx.fillRect(w * 0.48 - 3, 0, 6, h);
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    for (let i = 0; i < 14; i++) ctx.fillRect(rng.int(0, w), rng.int(0, h), rng.int(3, 18), 1);
+    ctx.fillStyle = '#f6f1ea';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `800 ${Math.floor(h * 0.28)}px Arial, sans-serif`;
+    ctx.fillText('КРАСНОЕ', w * 0.24, h * 0.38);
+    ctx.font = `700 ${Math.floor(h * 0.18)}px Arial, sans-serif`;
+    ctx.fillText('и', w * 0.24, h * 0.68);
+    ctx.font = `800 ${Math.floor(h * 0.22)}px Arial, sans-serif`;
+    ctx.fillText('КОРИЧНЕВОЕ', w * 0.74, h * 0.5);
+  }, false, 512, 128);
 
   // Мозаика соцреализма для торцов домов
   T.mosaic = canvasTex(64, (ctx, s) => {
