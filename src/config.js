@@ -1,7 +1,7 @@
 // Центральная настройка баланса и мира. Все числа — в метрах / секундах / процентах HP.
 export const CFG = {
   // Рендер
-  pixelScale: 0.62,        // чуть выше разрешение — меньше «роблокс»
+  pixelScale: 0.48,        // bitmap в духе Obra Dinn
   fov: 68,
   camDist: 4.6,
   camDistCombat: 6.0,
@@ -22,12 +22,16 @@ export const CFG = {
   gravity: 20,
   jumpVel: 6.5,
   groundAccel: 10,
-  airAccel: 1.2,
-  airWishCap: 1.15,
+  airAccel: 14,
+  airWishCap: 2.4,
+  bhopJumpBoost: 1.35,
+  bhopMaxSpeed: 16,
   friction: 6,
   stopSpeed: 1.8,
   coyoteTime: 0.09,
   jumpBuffer: 0.09,
+  flySpeed: 8.5,
+  gozeDuration: 600,       // 10 минут реального времени, без таймера на экране
   maxHp: 100,
   hpRegenDelay: 8,
   hpRegenRate: 1.2,        // % в секунду
@@ -58,8 +62,10 @@ export const CFG = {
   ghostOutsideChancePerSec: 0.0015,
 
   // Преследователь (класс 5)
-  stalkerSleep: [40, 120],
-  stalkerFood: [30, 90],
+  stalkerSleep: [90, 240],
+  stalkerFood: [40, 120],
+  stalkerRandomChance: 0.0009,
+  stalkerRandomAfter: 80,
   stalkerStealthLag: [5, 7],
   stalkerDamage: 22,
   stalkerDeathmatchLag: 1.6,

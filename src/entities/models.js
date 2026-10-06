@@ -138,15 +138,21 @@ export function buildGhost() {
 // --------- Преследователь (класс 5) ----------
 export function buildStalker() {
   const g = new THREE.Group();
+  const body = new THREE.Group();
   const mat = new THREE.MeshLambertMaterial({ color: 0x0b0b0d });
-  const legs = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 1.8, 8), mat); legs.position.y = 0.9; g.add(legs);
-  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.38, 1.15, 8), mat); torso.position.y = 2.35; g.add(torso);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), mat); head.position.y = 3.2; g.add(head);
+  const legs = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 1.8, 8), mat); legs.position.y = 0.9; body.add(legs);
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.38, 1.15, 8), mat); torso.position.y = 2.35; body.add(torso);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), mat); head.position.y = 3.2; body.add(head);
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x8b0000 });
+  const eyes = [];
   for (const sx of [-1, 1]) {
-    const a = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 2.2, 6), mat); a.position.set(sx * 0.42, 1.75, 0); g.add(a);
-    const e = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 5), new THREE.MeshBasicMaterial({ color: 0x9a9aa0 }));
-    e.position.set(sx * 0.09, 3.24, 0.22); g.add(e);
+    const a = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.05, 2.35, 6), mat); a.position.set(sx * 0.46, 1.7, 0.04); body.add(a);
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), eyeMat);
+    e.position.set(sx * 0.1, 3.26, 0.26); body.add(e); eyes.push(e);
   }
+  body.scale.setScalar(5);
+  g.add(body);
+  g.userData = { eyes };
   return g;
 }
 

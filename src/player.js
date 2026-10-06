@@ -26,6 +26,7 @@ export class Player {
     this.dead = false;
     this.forward = new THREE.Vector3(0, 0, 1);
     this.fallStart = null;
+    this.flying = false;
   }
 
   setWeapon(kind) {
@@ -71,8 +72,18 @@ export class Player {
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
     this.forward.set(fx, 0, fz);
 
+    if (!this.frozen && input.hit('KeyQ')) {
+      if (opts.canFly) {
+        this.flying = !this.flying;
+        if (this.flying) { this.crouch = false; this.grounded = false; this.fallStart = null; }
+      } else if (this.flying) {
+        this.flying = false;
+      } else {
+        this.flyDenied = true;
+      }
+    }
     // Приседание — переключатель
-    if (!this.frozen && (input.hit('ControlLeft') || input.hit('KeyC'))) {
+    if (!this.frozen && !this.flying && (input.hit('ControlLeft') || input.hit('KeyC'))) {
       if (this.crouch) { // встать можно, если нет потолка
         const c = statics.ceilingAt(this.pos.x, this.pos.z, this.pos.y + CFG.crouchHeight, CFG.playerRadius);
         if (c - this.pos.y > CFG.playerHeight + 0.05) this.crouch = false;
@@ -93,6 +104,43 @@ export class Player {
     const wish = this.crouch ? CFG.crouchSpeed : this.sprint ? CFG.sprintSpeed : CFG.walkSpeed;
     const mv = this.lastMove || { x: fx, z: fz };
 
+    if (this.flying) {
+      const lx = Math.sin(this.yaw) * Math.cos(this.pitch), ly = Math.sin(this.pitch), lz = Math.cos(this.yaw) * Math.cos(this.pitch);
+      let fxw = 0, fyw = 0, fzw = 0;
+      if (!this.frozen) {
+        if (input.down('KeyW')) { fxw += lx; fyw += ly; fzw += lz; }
+        if (input.down('KeyS')) { fxw -= lx; fyw -= ly; fzw -= lz; }
+        if (input.down('KeyD')) { fxw += -fz; fzw += fx; }
+        if (input.down('KeyA')) { fxw -= -fz; fzw -= fx; }
+        if (input.down('Space')) fyw += 1;
+        if (input.down('KeyC') || input.down('ControlLeft')) fyw -= 1;
+      }
+      const fl = Math.hypot(fxw, fyw, fzw) || 1;
+      const fs = this.sprint ? CFG.flySpeed * 1.35 : CFG.flySpeed;
+      this.vx = fxw / fl * fs; this.vy = fyw / fl * fs; this.vz = fzw / fl * fs;
+      this.moving = fl > 0.05;
+      const before = this.pos.clone();
+      statics.move(this.pos, this.vx * dt, this.vz * dt, CFG.playerRadius, this.pos.y, this.height);
+      this.pos.y += this.vy * dt;
+      const ground = statics.groundAt(this.pos.x, this.pos.z, this.pos.y, CFG.playerRadius * 0.8);
+      if (this.pos.y < ground) this.pos.y = ground;
+      this.grounded = false;
+      this.velocity.subVectors(this.pos, before).divideScalar(Math.max(dt, 1e-4));
+      this.speed = Math.hypot(this.vx, this.vz);
+      if (this.moving) this.animPhase += dt * 2;
+      const firingFly = !this.frozen && input.mouseDown && !opts.noFire;
+      this.weapon.update(dt, firingFly);
+      if (firingFly) this.aimTimer = 0.6;
+      this.aimTimer -= dt;
+      if (!this.frozen && input.hit('KeyR') && this.weapon.reload()) audio?.reload();
+      const wantYawF = this.aimTimer > 0 || opts.faceCamera ? this.yaw : (this.moving ? Math.atan2(mv.x, mv.z) : this.modelYaw);
+      let df = wantYawF - this.modelYaw; while (df > Math.PI) df -= Math.PI * 2; while (df < -Math.PI) df += Math.PI * 2;
+      this.modelYaw += df * Math.min(1, dt * 12);
+      this.updateModel(dt);
+      this.updateCamera(statics, dt);
+      return firingFly;
+    }
+
     if (!this.frozen && input.hit('Space')) this.jumpBuf = CFG.jumpBuffer;
     else this.jumpBuf = Math.max(0, this.jumpBuf - dt);
     if (this.grounded) this.coyote = CFG.coyoteTime;
@@ -110,6 +158,15 @@ export class Player {
       this.grounded = false;
       justJumped = true;
     }
+    if (justJumped && this.moving) {
+      const hor = Math.hypot(this.vx, this.vz);
+      if (hor < wish) {
+        this.vx = wx * wish;
+        this.vz = wz * wish;
+      }
+      this.vx += wx * CFG.bhopJumpBoost;
+      this.vz += wz * CFG.bhopJumpBoost;
+    }
 
     if (this.grounded && !justJumped) {
       const sp = Math.hypot(this.vx, this.vz);
@@ -120,8 +177,11 @@ export class Player {
       } else { this.vx = 0; this.vz = 0; }
       this.accelerate(wx, wz, wish, CFG.groundAccel, dt);
     } else {
-      this.accelerate(wx, wz, Math.min(wish, CFG.airWishCap), CFG.airAccel, dt);
+      this.accelerate(wx, wz, CFG.airWishCap, CFG.airAccel, dt);
     }
+    const cap = CFG.bhopMaxSpeed;
+    const spNow = Math.hypot(this.vx, this.vz);
+    if (spNow > cap) { this.vx *= cap / spNow; this.vz *= cap / spNow; }
 
     const before = this.pos.clone();
     const ox = this.pos.x, oz = this.pos.z;

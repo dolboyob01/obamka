@@ -16,7 +16,6 @@ export class AudioSys {
     this.buffers = {};
     this.pending = {
       shot: fetch(asset('shot.wav')).then(r => r.arrayBuffer()).catch(() => null),
-      step: fetch(asset('step.wav')).then(r => r.arrayBuffer()).catch(() => null),
     };
   }
 
@@ -32,7 +31,6 @@ export class AudioSys {
     this.noiseBuf = this._makeNoise(2);
     this._startWind();
     this._loadBuf('shot', asset('shot.wav'));
-    this._loadBuf('step', asset('step.wav'));
     this._track('outside', asset('outside.mp3'), true);
     this._track('chase', asset('hunk_kunilingues.mp3'), true);
     this._track('arena', asset('lyudoyob.mp3'), true);
@@ -130,10 +128,11 @@ export class AudioSys {
     return buf;
   }
 
-  footstep(inside, crouch) {
+  footstep() {}
+  playHunt() {
     if (!this.unlocked) return;
-    const vol = crouch ? 0.16 : inside ? 0.34 : 0.28;
-    this._playBuf('step', { vol, rate: 0.9 + Math.random() * 0.18, dur: 0.55 });
+    if (this.current && this.current.name === 'chase') return;
+    this.playMusic('chase', 0.7, 1.2);
   }
   pistol() { if (this.unlocked) this._playBuf('shot', { vol: 0.9, rate: 0.96 + Math.random() * 0.08 }); }
   minigun() { if (this.unlocked) this._playBuf('shot', { vol: 0.4, rate: 1.04 + Math.random() * 0.14, dur: 0.16 }); }
@@ -157,14 +156,12 @@ export class AudioSys {
   heartbeat() {}
   carouselSqueak() {}
 
-  // Ветер — бесконечный фильтрованный шум
+  // Ветер — только фильтрованный шум, без осцилляторов
   _startWind() {
     const ctx = this.ctx;
     const s = ctx.createBufferSource(); s.buffer = this.noiseBuf; s.loop = true;
-    const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 320; f.Q.value = 0.7;
+    const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 280; f.Q.value = 0.55;
     const g = ctx.createGain(); g.gain.value = 0.12;
-    const lfo = ctx.createOscillator(); lfo.frequency.value = 0.13;
-    const lg = ctx.createGain(); lg.gain.value = 180; lfo.connect(lg); lg.connect(f.frequency); lfo.start();
     s.connect(f); f.connect(g); g.connect(this.sfxGain); s.start();
     this.wind = g;
   }

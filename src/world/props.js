@@ -142,10 +142,13 @@ export function buildTundra(batch, rng, size) {
       boxes.push({ x0: x, y0: 0, z0: z, x1: x + 4, y1: 1.5, z1: z + 1.7 });
     }
   }
+  const shops = [];
   if (rng.chance(0.22)) {
     const sx = rng.range(4, size - 20), sz = rng.range(4, size - 14);
-    const shop = rng.chance(0.5) ? buildMagma : buildKrasnoe;
-    boxes.push(...shop(batch, sx, sz, sx + 13, sz + 9, rng.pick(['s', 'n', 'w', 'e'])).boxes);
+    const shopFn = rng.chance(0.5) ? buildMagma : buildKrasnoe;
+    const shop = shopFn(batch, sx, sz, sx + 13, sz + 9, rng.pick(['s', 'n', 'w', 'e']));
+    boxes.push(...shop.boxes);
+    shops.push(shop);
   }
   // иногда — гаражи-ракушки
   if (rng.chance(0.4)) {
@@ -155,7 +158,7 @@ export function buildTundra(batch, rng, size) {
     }
     boxes.push({ x0: gx, y0: 0, z0: gz, x1: gx + 14.2, y1: 2.4, z1: gz + 6 });
   }
-  return { boxes };
+  return { boxes, shops };
 }
 
 // Открытая улица: проезд, фонари, киоск — воздух между домами
@@ -177,15 +180,19 @@ export function buildStreet(batch, rng, size) {
       boxes.push({ x0: x - 0.12, y0: 0, z0: z - 0.12, x1: x + 0.12, y1: 5.6, z1: z + 0.12 });
     }
   }
+  const shops = [];
   if (rng.chance(0.72)) {
     const north = rng.chance(0.5);
     const kx = rng.range(6, size - 20);
     const kz = north ? c + 8.2 : c - 16.5;
     const front = north ? 's' : 'n';
-    const shop = rng.chance(0.5) ? buildMagma : buildKrasnoe;
-    boxes.push(...shop(batch, kx, kz, kx + 13, kz + 8.5, front).boxes);
+    const shopFn = rng.chance(0.5) ? buildMagma : buildKrasnoe;
+    const shop = shopFn(batch, kx, kz, kx + 13, kz + 8.5, front);
+    boxes.push(...shop.boxes);
+    shops.push(shop);
   }
   const t = buildTundra(batch, rng, size);
   boxes.push(...t.boxes.filter(b => b.z0 > c + 7 || b.z1 < c - 7));
-  return { boxes };
+  if (t.shops) shops.push(...t.shops);
+  return { boxes, shops };
 }

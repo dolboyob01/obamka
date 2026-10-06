@@ -91,7 +91,7 @@ export function buildMagma(batch, x0, z0, x1, z1, front = 's') {
   const ap = apron(x0, z0, x1, z1, front, 2.4);
   batch.add(flatPlane(ap.x0, ap.z0, ap.x1, ap.z1, 0.02, true, 3, 0x3a3a3c), M.DARK);
 
-  return { boxes: [{ x0, y0: 0, z0, x1, y1: h, z1 }, { x0: py.x0, y0: 0, z0: py.z0, x1: py.x1, y1: 4.1, z1: py.z1 }] };
+  return { boxes: [{ x0, y0: 0, z0, x1, y1: h, z1 }, { x0: py.x0, y0: 0, z0: py.z0, x1: py.x1, y1: 4.1, z1: py.z1 }], kind: 'magma', door: { x: door.x, z: door.z } };
 }
 
 // «Красное и Коричневое» — полосатый алкопавильон, белые ленты заменены на коричневые
@@ -118,11 +118,11 @@ export function buildKrasnoe(batch, x0, z0, x1, z1, front = 's') {
   batch.add(windowPane(1.35, 2.05, f.yaw, door.x + ox, 1.1, door.z + oz, 0x1a1010), M.DARK);
   for (const t of [0.2, 0.8]) {
     const p = alongPoint(x0, z0, x1, z1, front, t);
-    batch.add(windowPane(1.9, 1.35, f.yaw, p.x + ox, 1.45, p.z + oz, new THREE.Color(0.35, 0.12, 0.08)), M.LAMP);
+    batch.add(windowPane(1.9, 1.35, f.yaw, p.x + ox, 1.45, p.z + oz, new THREE.Color(0.82, 0.28, 0.1)), M.LAMP);
   }
 
   const ap = apron(x0, z0, x1, z1, front, 1.8);
   batch.add(flatPlane(ap.x0, ap.z0, ap.x1, ap.z1, 0.02, true, 3, 0x2e2a28), M.DARK);
 
-  return { boxes: [{ x0, y0: 0, z0, x1, y1: h, z1 }] };
+  return { boxes: [{ x0, y0: 0, z0, x1, y1: h, z1 }], kind: 'kik', door: { x: door.x, z: door.z } };
 }

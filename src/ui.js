@@ -8,7 +8,7 @@ export class UI {
       hpFill: document.querySelector('#hp .fill'), ammo: $('ammo'), objective: $('objective'), stalker: $('stalker'),
       prompt: $('prompt'), progress: $('progress'), progressFill: document.querySelector('#progress div'),
       notify: $('notify'), chasehint: $('chasehint'), arena: $('arena'), bomb: $('bomb'), fade: $('fade'),
-      start: $('start'), menu: $('menu'), choice: $('choice'), choiceTimer: $('choiceTimer'), gameover: $('gameover'),
+      start: $('start'), menu: $('menu'), choice: $('choice'), choiceTimer: $('choiceTimer'), gameover: $('gameover'), goze: $('goze'),
       goReason: $('goReason'), goStats: $('goStats'), stalkerBtn: $('stalkerBtn'), crosshair: $('crosshair'),
     };
     this.chaseIntensity = 0;

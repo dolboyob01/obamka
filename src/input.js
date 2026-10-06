@@ -14,7 +14,7 @@ export class Input {
     window.addEventListener('keydown', e => {
       if (e.repeat) return;
       this.keys.add(e.code); this.pressed.add(e.code);
-      if (['Space', 'Tab', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) e.preventDefault();
+      if (['Space', 'Tab', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ'].includes(e.code)) e.preventDefault();
     });
     window.addEventListener('keyup', e => this.keys.delete(e.code));
     window.addEventListener('blur', () => { this.keys.clear(); this.mouseDown = false; });

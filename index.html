@@ -1,14 +1,15 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" class="start-open">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ПОДЪЕЗД</title>
+  <link rel="preload" href="%BASE_URL%fonts/BlackDread-RpxPV.otf" as="font" type="font/otf" crossorigin>
   <style>
     @font-face {
       font-family: "Black Dread";
       src: url("%BASE_URL%fonts/BlackDread-RpxPV.otf") format("opentype");
-      font-display: swap;
+      font-display: block;
     }
     html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font-family: "Lucida Console", "Courier New", monospace; color: #c8c8c0; user-select: none; }
     canvas#game { display: block; width: 100vw; height: 100vh; }
@@ -23,7 +24,11 @@
     #objective { left: 24px; top: 20px; font-size: 14px; color: #a8a8a0; }
     #stalker { right: 24px; top: 20px; font-size: 14px; text-align: right; }
     #stalker b { display: block; font-size: 18px; }
-    #stalker.sleep b { color: #6a8a6a; } #stalker.food b { color: #b0a050; } #stalker.hunt b { color: #d03030; animation: blink .6s infinite alternate; }
+    #stalker.sleep b { color: #6a8a6a; }
+    #stalker.food b { color: #b0a050; }
+    #stalker.belenka b { color: #d8d0c4; }
+    #stalker.dodep b { color: #9a7ab8; }
+    #stalker.hunt b { color: #d03030; animation: blink .6s infinite alternate; }
     @keyframes blink { from { opacity: 1 } to { opacity: .35 } }
     #crosshair { left: 50%; top: 50%; width: 28px; height: 28px; margin: -14px; background: none; opacity: .95; }
     #crosshair i { position: absolute; background: #f0eee4; box-shadow: 0 0 0 1px rgba(0,0,0,.75); }
@@ -43,7 +48,9 @@
     #arena { left: 50%; top: 20px; transform: translateX(-50%); font-size: 18px; color: #e05050; display: none; }
     #bomb { left: 50%; top: 52px; transform: translateX(-50%); font-size: 16px; color: #e0a040; display: none; }
 
-    .overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; background: rgba(0,0,0,.82); pointer-events: auto; text-align: center; }
+    .overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; background: #000; pointer-events: auto; text-align: center; }
+    .start-open canvas#game { visibility: hidden; }
+    .start-open .hud { visibility: hidden; }
     .overlay.show { display: flex; }
     .overlay h1 { font-size: 64px; margin: 0 0 8px; letter-spacing: 12px; color: #d8d8d0; text-shadow: 4px 4px 0 #300; }
     .overlay h2 { font-size: 28px; margin: 0 0 20px; letter-spacing: 4px; }
@@ -58,12 +65,12 @@
     #start h1 { font-size: 80px; }
     #start .brand {
       font-family: "Black Dread", serif;
-      font-size: 86px;
-      line-height: .9;
+      font-size: clamp(120px, 18vw, 180px);
+      line-height: .82;
       color: #8b0000;
-      letter-spacing: 4px;
-      margin: 0 0 10px;
-      text-shadow: 0 3px 0 #2a0000, 0 0 22px rgba(90, 0, 0, .85);
+      letter-spacing: 6px;
+      margin: 0 0 14px;
+      text-shadow: 0 4px 0 #2a0000, 0 0 28px rgba(90, 0, 0, .85);
     }
     #gameover h1 { color: #a01010; }
     .fade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity .4s; }
@@ -89,9 +96,9 @@
       <div class="brand">obamka</div>
       <h1>ПОДЪЕЗД</h1>
       <h2>тундра. панельки. бесконечность.</h2>
-      <p>Твоя задача — заминировать подъезды. Бомба закладывается просто: присядь в углу любого подъезда и сделай своё дело.</p>
-      <p>WASD — ходить · Space — прыжок / распрыжка · Shift — бежать · C / Ctrl — присесть · E — взаимодействие · ЛКМ — стрелять · R — перезарядка · Esc — меню</p>
-      <p style="color:#e03030">Внутри домов тебя ждут. Если увидишь серую тень — беги и не оборачивайся. От Преследователя спасает только лифт.</p>
+      <p>Твоя задача — заминировать подъезды. Бомба закладывается просто: присядь в углу любого подъезда и сделай то, что предначертано.</p>
+      <p>WASD — ходить · Space — прыжок / распрыжка · Shift — бежать · C / Ctrl — присесть · Q — полёт под гавваховыми гозе · E — взаимодействие · ЛКМ — стрелять · R — перезарядка · Esc — меню</p>
+      <p style="color:#e03030">Внутри домов тебя ждут. Если увидишь серую тень — беги и не оборачивайся. От Преследователя спасает только лифт. Но это не точно...</p>
       <button class="btn" id="startBtn">НАЧАТЬ</button>
     </div>
 
@@ -103,7 +110,7 @@
       <div class="row"><span>Эффекты</span><input type="range" id="volSfx" min="0" max="1" step="0.05" value="0.9"></div>
       <div class="row"><span>Чувствительность</span><input type="range" id="sens" min="0.5" max="3" step="0.1" value="1"></div>
       <div class="row"><label><input type="checkbox" id="invertY" checked> Инверсия мыши (Y)</label></div>
-      <p>WASD — ходить · Space — прыжок / распрыжка · Shift — бежать · C / Ctrl — присесть · E — действие · ЛКМ — огонь · R — перезарядка</p>
+      <p>WASD — ходить · Space — прыжок / распрыжка · Shift — бежать · C / Ctrl — присесть · Q — полёт под гавваховыми гозе · E — действие · ЛКМ — огонь · R — перезарядка</p>
     </div>
 
     <div id="choice" class="overlay">
@@ -116,6 +123,15 @@
       <p>Тихо: он идёт за тобой с отставанием в несколько секунд. Deathmatch: тебе дадут шестиствольный пулемёт, но на каждого убитого придут двое.</p>
       <p>Спастись можно только в лифте.</p>
       <div class="timer" id="choiceTimer">10</div>
+    </div>
+
+    <div id="goze" class="overlay">
+      <h2>Хочешь полетать?</h2>
+      <p>В Красном и Коричневом больше ничего взять нельзя.<br>Только Гавваховый Гозе 60%.</p>
+      <div>
+        <button class="btn" id="gozeYes">[Y] Взять Гозе</button>
+        <button class="btn" id="gozeNo">[N] Уйти</button>
+      </div>
     </div>
 
     <div id="gameover" class="overlay">

@@ -20,6 +20,9 @@ export class OutdoorWorld {
     this.destroyed = new Set();
     this.pending = [];
     this.size = CFG.chunkSize;
+    this.windows = [];
+    this.shops = [];
+    this.sessionSeed = (Math.random() * 1e9) | 0;
 
     // Земля
     const gsize = 360;
@@ -124,34 +127,51 @@ export class OutdoorWorld {
     const rng = new Rng(hash2(cx, cz, 17));
     const type = this.chunkType(cx, cz);
     const batch = new Batch();
-    const chunk = { cx, cz, key, type, group: new THREE.Group(), entrances: [], carousel: null };
+    const chunk = { cx, cz, key, type, group: new THREE.Group(), entrances: [], windows: [], shops: [], carousel: null };
     let boxes = [], k = 0, design = null;
 
     if (type === 'building') {
       k = this.facingFor(cx, cz, rng);
       design = designBuilding(rng, S);
       const rubble = this.destroyed.has(key);
-      if (rubble) buildRubbleGeometry(batch, design, rng); else buildBuildingGeometry(batch, design, rng);
+      const winRng = new Rng(hash2(cx, cz, 771 + (this.sessionSeed || 0)));
+      const built = rubble ? (buildRubbleGeometry(batch, design, rng), { windows: [] }) : buildBuildingGeometry(batch, design, rng, winRng);
       boxes = buildingBoxes(design, rubble);
       if (!rubble) {
         design.entrances.forEach((e, i) => {
           const w = this.toWorld(cx, cz, k, e.x, e.z), n = this.rotDir(k, e.nx, e.nz);
           chunk.entrances.push({ x: w.x, z: w.z, nx: n.x, nz: n.z, floors: e.floors, key: key + ':' + i, chunkKey: key, index: i, seed: hash2(cx, cz, 100 + i), lamp: e.lamp });
         });
+        const gate = chunk.entrances[0];
+        for (let i = 0; i < (built.windows || []).length; i++) {
+          const w = built.windows[i];
+          const p = this.toWorld(cx, cz, k, w.x, w.z), n = this.rotDir(k, w.nx, w.nz);
+          chunk.windows.push({
+            x: p.x, y: w.y, z: p.z, nx: n.x, nz: n.z, floor: w.floor,
+            key: key + ':w' + i, chunkKey: key, entrance: gate,
+            ambush: (hash2(cx, cz, 400 + i + (this.sessionSeed || 0)) % 5) === 0,
+          });
+        }
       }
       // немного пустыря вокруг дома
       const t = buildTundra(batch, new Rng(hash2(cx, cz, 5)), S);
       boxes = boxes.concat(t.boxes.filter(b => !design.blocks.some(bl => b.x1 > bl.x0 - 3 && b.x0 < bl.x1 + 3 && b.z1 > bl.z0 - 3 && b.z0 < bl.z1 + 3)));
+      for (const shop of t.shops || []) this.registerShop(chunk, cx, cz, k, shop);
     } else if (type === 'courtyard') {
       const r = buildCourtyard(batch, rng, S, false);
       boxes = r.boxes;
       if (cx === 0 && cz === 0) {
-        boxes.push(...buildMagma(batch, 5, 8, 20.5, 18.2, 'n').boxes);
-        boxes.push(...buildKrasnoe(batch, 26.5, 8.2, 43, 17.6, 'n').boxes);
+        const magma = buildMagma(batch, 5, 8, 20.5, 18.2, 'n');
+        const kik = buildKrasnoe(batch, 26.5, 8.2, 43, 17.6, 'n');
+        boxes.push(...magma.boxes, ...kik.boxes);
+        this.registerShop(chunk, cx, cz, 0, magma);
+        this.registerShop(chunk, cx, cz, 0, kik);
       } else if (rng.chance(0.55)) {
-        const shop = rng.chance(0.5) ? buildMagma : buildKrasnoe;
+        const shopFn = rng.chance(0.5) ? buildMagma : buildKrasnoe;
         const x0 = rng.range(4, 8);
-        boxes.push(...shop(batch, x0, 2, x0 + 13, 11, rng.pick(['s', 'n'])).boxes);
+        const shop = shopFn(batch, x0, 2, x0 + 13, 11, rng.pick(['s', 'n']));
+        boxes.push(...shop.boxes);
+        this.registerShop(chunk, cx, cz, 0, shop);
       }
       const cw = this.toWorld(cx, cz, 0, r.carousel.x, r.carousel.z);
       const rotor = makeCarouselRotor(); rotor.position.set(cw.x, 0, cw.z);
@@ -166,9 +186,13 @@ export class OutdoorWorld {
         this.swings = this.swings || []; this.swings.push(chunk.swing);
       }
     } else if (type === 'street') {
-      boxes = buildStreet(batch, rng, S).boxes;
+      const st = buildStreet(batch, rng, S);
+      boxes = st.boxes;
+      for (const shop of st.shops || []) this.registerShop(chunk, cx, cz, 0, shop);
     } else {
-      boxes = buildTundra(batch, rng, S).boxes;
+      const tn = buildTundra(batch, rng, S);
+      boxes = tn.boxes;
+      for (const shop of tn.shops || []) this.registerShop(chunk, cx, cz, 0, shop);
     }
 
     // Широкие дороги между чанками — сетка улиц
@@ -187,7 +211,15 @@ export class OutdoorWorld {
       this.statics.add(Math.min(a.x, d.x), b.y0, Math.min(a.z, d.z), Math.max(a.x, d.x), b.y1, Math.max(a.z, d.z), key);
     }
     this.entrances.push(...chunk.entrances);
+    this.windows.push(...chunk.windows);
+    this.shops.push(...chunk.shops);
     this.chunks.set(key, chunk);
+  }
+
+  registerShop(chunk, cx, cz, rot, shop) {
+    if (!shop?.door || !shop.kind) return;
+    const p = this.toWorld(cx, cz, rot, shop.door.x, shop.door.z);
+    chunk.shops.push({ kind: shop.kind, x: p.x, z: p.z, chunkKey: chunk.key });
   }
 
   unload(key) {
@@ -199,6 +231,8 @@ export class OutdoorWorld {
     if (ch.swing) { this.scene.remove(ch.swing.seat); this.swings = this.swings.filter(s => s !== ch.swing); }
     this.statics.removeTag(key);
     this.entrances = this.entrances.filter(e => e.chunkKey !== key);
+    this.windows = this.windows.filter(w => w.chunkKey !== key);
+    this.shops = this.shops.filter(s => s.chunkKey !== key);
     this.chunks.delete(key);
   }
 
@@ -210,6 +244,25 @@ export class OutdoorWorld {
       this.unload(chunkKey);
       this.load(ch.cx, ch.cz);
     }
+  }
+
+  nearestWindow(x, y, z, maxD = 2.4) {
+    let best = null, bd = maxD;
+    for (const w of this.windows) {
+      const d = Math.hypot(w.x - x, w.z - z) + Math.abs(w.y - y) * 0.55;
+      if (d < bd) { bd = d; best = w; }
+    }
+    return best;
+  }
+
+  nearestKik(x, z, maxD = 2.2) {
+    let best = null, bd = maxD;
+    for (const s of this.shops) {
+      if (s.kind !== 'kik') continue;
+      const d = Math.hypot(s.x - x, s.z - z);
+      if (d < bd) { bd = d; best = s; }
+    }
+    return best;
   }
 
   nearestEntrance(x, z, maxD = 1.6) {

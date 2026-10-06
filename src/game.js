@@ -6,6 +6,7 @@ import { makeMaterials } from './world/batch.js';
 import { StaticWorld } from './physics.js';
 import { OutdoorWorld } from './world/chunks.js';
 import { generateInterior } from './world/interior.js';
+import { generateApartment } from './world/apartment.js';
 import { ChaseCorridor } from './world/corridor.js';
 import { Arena } from './world/arena.js';
 import { Population } from './entities/population.js';
@@ -22,6 +23,7 @@ const FOG = {
   interior: { color: 0x0c0c10, density: 0.048 },
   chase: { color: 0x050506, density: 0.07 },
   arena: { color: 0x7a5850, density: 0.0035 },
+  apartment: { color: 0x2c221c, density: 0.012 },
 };
 
 export class Game {
@@ -57,14 +59,18 @@ export class Game {
     this.muzzle = new THREE.PointLight(0xffc070, 0, 8, 2); this.scene.add(this.muzzle);
 
     this.state = 'start';
-    this.menuOpen = false; this.choiceOpen = false;
+    this.menuOpen = false; this.choiceOpen = false; this.gozeOpen = false;
+    this.gozeLeft = 0;
+    this._wasFlying = false;
     this.time = 0; this.trail = []; this.trailTimer = 0;
-    this.interiors = new Map(); this.current = null; this.interiorGroup = null;
+    this.interiors = new Map(); this.apartments = new Map(); this.current = null; this.currentApt = null; this.interiorGroup = null;
     this.bombs = []; this.score = 0; this.shake = 0; this.fadeLevel = 0;
     this.savedOutside = { x: 0, z: 3, yaw: Math.PI };
     this.elevator = null; this.plant = 0; this.planting = false;
     this.worldTime = 0; this.heartbeat = 0; this.stats = { kills: 0, buildings: 0 };
 
+    document.documentElement.classList.add('start-open');
+    document.body.classList.add('start-open');
     this.setMode('outside');
     // центр стартового двора (чанк 0,0)
     this.savedOutside = { x: CFG.chunkSize / 2, z: CFG.chunkSize / 2 + 4, yaw: Math.PI };
@@ -83,7 +89,12 @@ export class Game {
     const $ = (id) => document.getElementById(id);
     $('startBtn').onclick = () => this.startGame();
     $('resumeBtn').onclick = () => this.toggleMenu(false);
-    $('stalkerBtn').onclick = () => { this.stalker.setEnabled(!this.stalker.enabled); $('stalkerBtn').textContent = 'ПРЕСЛЕДОВАТЕЛЬ: ' + (this.stalker.enabled ? 'ВКЛ' : 'ВЫКЛ'); this.audio.ui(); };
+    $('stalkerBtn').onclick = () => {
+      this.stalker.setEnabled(!this.stalker.enabled);
+      $('stalkerBtn').textContent = 'ПРЕСЛЕДОВАТЕЛЬ: ' + (this.stalker.enabled ? 'ВКЛ' : 'ВЫКЛ');
+      if (!this.stalker.enabled) this.endHuntMusic();
+      this.audio.ui();
+    };
     $('volMusic').oninput = (e) => this.audio.setVolumes(parseFloat(e.target.value), this.audio.sfxVolume);
     $('volSfx').oninput = (e) => this.audio.setVolumes(this.audio.musicVolume, parseFloat(e.target.value));
     $('sens').oninput = (e) => { this.input.sensitivity = 0.0022 * parseFloat(e.target.value); };
@@ -95,15 +106,22 @@ export class Game {
     $('stealthBtn').onclick = () => this.chooseHunt('stealth');
     $('dmBtn').onclick = () => this.chooseHunt('deathmatch');
     $('restartBtn').onclick = () => location.reload();
-    this.canvas.addEventListener('click', () => { if (this.isPlaying() && !this.menuOpen && !this.choiceOpen) this.input.lock(); });
+    const gy = $('gozeYes'), gn = $('gozeNo');
+    if (gy) gy.onclick = () => this.answerGoze(true);
+    if (gn) gn.onclick = () => this.answerGoze(false);
+    this.canvas.addEventListener('click', () => { if (this.isPlaying() && !this.menuOpen && !this.choiceOpen && !this.gozeOpen) this.input.lock(); });
   }
 
-  isPlaying() { return ['outside', 'interior', 'chase', 'arena'].includes(this.state); }
+  isPlaying() { return ['outside', 'interior', 'chase', 'arena', 'apartment'].includes(this.state); }
 
   startGame() {
     this.audio.unlock();
+    document.documentElement.classList.remove('start-open');
+    document.body.classList.remove('start-open');
     this.ui.show('start', false);
     this.state = 'outside';
+    this.outdoor.sessionSeed = (Math.random() * 1e9) | 0;
+    for (const key of [...this.outdoor.chunks.keys()]) this.outdoor.unload(key);
     for (let i = 0; i < 20; i++) this.outdoor.update(this.player.pos, 0, null);
     this.input.lock();
     this.audio.playOutside(0.72, 1.2);
@@ -125,12 +143,12 @@ export class Game {
     this.scene.background = new THREE.Color(f.color);
     this.mode = mode;
     this.outdoor.setVisible(mode === 'outside');
-    if (this.interiorGroup) this.interiorGroup.visible = mode === 'interior';
+    if (this.interiorGroup) this.interiorGroup.visible = mode === 'interior' || mode === 'apartment';
     if (mode !== 'chase') this.corridor.group.visible = false;
     if (mode !== 'arena') this.arena.group.visible = false;
-    this.hemi.intensity = mode === 'outside' ? 3.6 : mode === 'arena' ? 3.8 : mode === 'interior' ? 1.2 : 0.65;
-    this.hemi.color.set(mode === 'arena' ? 0xf0c8b8 : 0xc8ccd2);
-    this.ambient.intensity = mode === 'outside' ? 1.55 : mode === 'arena' ? 2.6 : 0.32;
+    this.hemi.intensity = mode === 'outside' ? 3.6 : mode === 'arena' ? 3.8 : mode === 'apartment' ? 2.4 : mode === 'interior' ? 1.2 : 0.65;
+    this.hemi.color.set(mode === 'arena' ? 0xf0c8b8 : mode === 'apartment' ? 0xe8d2b8 : 0xc8ccd2);
+    this.ambient.intensity = mode === 'outside' ? 1.55 : mode === 'arena' ? 2.6 : mode === 'apartment' ? 1.15 : 0.32;
     this.dir.intensity = mode === 'outside' ? 2.15 : mode === 'arena' ? 2.0 : 0;
     this.statics.hasDefaultGround = true;
     this.statics.defaultGround = (mode === 'outside' || mode === 'arena') ? 0 : -1000;
@@ -188,12 +206,90 @@ export class Game {
   exitToOutside(pos = this.savedOutside) {
     this.switchWorld('outside');
     this.state = 'outside';
-    this.player.teleport(pos.x, 0, pos.z, pos.yaw);
+    this.player.teleport(pos.x, pos.y ?? 0, pos.z, pos.yaw);
     this.player.crouch = false;
     if (this.player.weapon.kind === 'minigun' && this.stalker.mode !== 'deathmatch') this.player.setWeapon('pistol');
     // сразу подгружаем ближние чанки, чтобы не провалиться
     for (let i = 0; i < 9; i++) this.outdoor.update(this.player.pos, 0, null);
     this.audio.playOutside(0.72, 1.4);
+  }
+
+  enterApartment(win) {
+    if (!win) return;
+    this.savedOutside = { x: win.x + win.nx * 2.4, z: win.z + win.nz * 2.4, y: 0, yaw: Math.atan2(-win.nx, -win.nz) };
+    let apt = this.apartments.get(win.key);
+    if (!apt) {
+      apt = generateApartment(win.key.split('').reduce((a, c) => a + c.charCodeAt(0), 1), this.materials);
+      apt.window = win;
+      this.apartments.set(win.key, apt);
+    }
+    apt.window = win;
+    if (this.interiorGroup) this.scene.remove(this.interiorGroup);
+    this.interiorGroup = apt.group; this.scene.add(apt.group);
+    this.currentApt = apt;
+    this.switchWorld('apartment');
+    this.state = 'apartment';
+    for (const b of apt.boxes) this.statics.add(b.x0, b.y0, b.z0, b.x1, b.y1, b.z1, 'apt');
+    this.player.flying = false;
+    this.player.teleport(apt.playerStart.x, apt.playerStart.y, apt.playerStart.z, apt.playerStart.yaw);
+    this.population.clear(e => e.cls === 3);
+    for (const s of apt.spawns) this.population.spawn(3, s.x, s.y, s.z);
+    this.audio.stopMusic(0.8);
+    if (win.ambush) {
+      this.stalker.pos.x = apt.stalkerSpot.x; this.stalker.pos.y = 0; this.stalker.pos.z = apt.stalkerSpot.z;
+      this.stalker.startHunt(this, { silent: true });
+      this.stalker.worldSince = this.time - 20;
+      this.ui.notify('ОН УЖЕ В КВАРТИРЕ. Беги в подъезд и вызови лифт.', 5.5, 'danger');
+    } else {
+      this.ui.notify('Чужая квартира. Ковёр. Запах борща.', 3.2, 'info');
+    }
+  }
+
+  exitApartment(throughWindow) {
+    const win = this.currentApt?.window;
+    const hunting = this.stalker.state === 'hunt';
+    if (throughWindow && win && this.gozeLeft > 0) {
+      this.exitToOutside({ x: win.x + win.nx * 2.6, y: win.y - 0.95, z: win.z + win.nz * 2.6, yaw: Math.atan2(win.nx, win.nz) });
+      this.player.flying = true;
+      this.player.pos.y = Math.max(this.player.pos.y, win.y - 1.05);
+      if (hunting) {
+        this.stalker.aerial = true;
+        this.stalker.pos.x = win.x; this.stalker.pos.y = win.y; this.stalker.pos.z = win.z;
+        this.ui.notify('Он летит за тобой. Ищи подъезд и лифт.', 5, 'danger');
+      }
+    } else {
+      this.exitToOutside();
+    }
+    this.currentApt = null;
+  }
+
+  endHuntMusic() {
+    if (this.state === 'chase') return;
+    if (this.state === 'outside') this.audio.playOutside(0.72, 1.2);
+    else if (this.state === 'arena') this.audio.playMusic('arena', 0.75, 1);
+    else this.audio.stopMusic(0.8);
+  }
+
+  enterKik() {
+    if (this.stalker.state === 'hunt') {
+      this.stalker.reset();
+      this.endHuntMusic();
+    }
+    this.player.flying = false;
+    this.gozeOpen = true;
+    this.ui.show('goze', true);
+    this.input.unlock();
+  }
+
+  answerGoze(yes) {
+    if (!this.gozeOpen) return;
+    this.gozeOpen = false;
+    this.ui.show('goze', false);
+    if (yes) {
+      this.gozeLeft = CFG.gozeDuration;
+      this.ui.notify('Гавваховый Гозе 60%. Q — полёт под гавваховыми гозе.', 4.5, 'info');
+    }
+    if (this.isPlaying()) this.input.lock();
   }
 
   // ---------- Побег от призрака ----------
@@ -284,6 +380,8 @@ export class Game {
     this.audio.elevatorHum(false); this.audio.ding();
     this.player.frozen = false;
     this.stalker.reset();
+    this.endHuntMusic();
+    this.player.flying = false;
     this.population.clear(e => e.cls === 'minion');
     if (this.player.weapon.kind === 'minigun') this.player.setWeapon('pistol');
     if (rnd.chance(CFG.elevatorArenaChance)) { this.enterArena(); return; }
@@ -403,6 +501,29 @@ export class Game {
     if (this.state === 'outside') {
       const e = this.outdoor.nearestEntrance(pos.x, pos.z, 1.8);
       if (e) { text = 'E — войти в подъезд'; action = () => this.enterInterior(e); }
+      const kik = this.outdoor.nearestKik(pos.x, pos.z, 2.3);
+      if (!action && kik) {
+        text = 'E — войти в Красное и Коричневое';
+        action = () => this.enterKik();
+      }
+      const win = this.outdoor.nearestWindow(pos.x, pos.y + 1.15, pos.z, p.flying ? 2.9 : 2.3);
+      if (!action && win && (p.flying || Math.abs((pos.y + 1.2) - win.y) < 1.8)) {
+        text = 'E — влететь в окно';
+        action = () => this.enterApartment(win);
+      }
+    } else if (this.state === 'apartment' && this.currentApt) {
+      const apt = this.currentApt;
+      if (Math.hypot(pos.x - apt.windowExit.x, pos.z - apt.windowExit.z) < 1.5) {
+        text = p.flying ? 'E — вылететь в окно' : (this.gozeLeft > 0 ? 'E — к окну  ·  Q — полёт' : 'E — к окну');
+        action = () => this.exitApartment(true);
+      }
+      if (Math.hypot(pos.x - apt.door.x, pos.z - apt.door.z) < 1.35) {
+        text = 'E — в подъезд';
+        action = () => {
+          const gate = apt.window?.entrance || this.outdoor.entrances[0];
+          if (gate) this.enterInterior(gate, apt.window?.floor ?? 0);
+        };
+      }
     } else if (this.state === 'interior' && this.current) {
       const it = this.current;
       if (Math.hypot(pos.x - it.exit.x, pos.z - it.exit.z) < 1.3 && Math.abs(pos.y) < 1) { text = 'E — выйти на улицу'; action = () => this.exitToOutside(); }
@@ -460,6 +581,8 @@ export class Game {
     else if (this.state === 'chase') lamps = this.corridor.lamps.map(l => ({ ...l, color: 0xffd090, i: 8 }));
     else if (this.state === 'outside') {
       for (const e of this.outdoor.entrances) if (e.lamp) lamps.push({ x: e.x + e.nx * 0.9, y: 2.3, z: e.z + e.nz * 0.9, color: 0xffd090, i: 7, flicker: false });
+    } else if (this.state === 'apartment' && this.currentApt) {
+      lamps = this.currentApt.lamps.map(l => ({ ...l, color: 0xffd8a0, i: 9 }));
     } else if (this.state === 'arena') {
       lamps.push({ x: p.x, y: 5.8, z: p.z, color: 0xffe8d0, i: 36, flicker: false });
       lamps.push({ x: p.x + 10, y: 6.2, z: p.z + 4, color: 0xffc8a0, i: 26, flicker: false });
@@ -481,7 +604,11 @@ export class Game {
     dt = Math.min(dt, 0.05);
     if (this.state === 'start' || this.state === 'gameover') { this.render(dt); this.input.flush(); return; }
 
-    if (this.input.hit('Escape') && !this.choiceOpen) this.toggleMenu(!this.menuOpen);
+    if (this.input.hit('Escape') && !this.choiceOpen && !this.gozeOpen) this.toggleMenu(!this.menuOpen);
+    if (this.gozeOpen) {
+      if (this.input.hit('KeyY')) this.answerGoze(true);
+      else if (this.input.hit('KeyN')) this.answerGoze(false);
+    }
     if (this.choiceOpen) {
       this.choiceTimer -= dt;
       this.ui.el.choiceTimer.textContent = Math.ceil(this.choiceTimer);
@@ -489,7 +616,7 @@ export class Game {
       else if (this.input.hit('Digit2')) this.chooseHunt('deathmatch');
       else if (this.choiceTimer <= 0) this.chooseHunt('stealth');
     }
-    if (this.menuOpen || this.choiceOpen) { this.render(dt); this.input.flush(); return; }
+    if (this.menuOpen || this.choiceOpen || this.gozeOpen) { this.render(dt); this.input.flush(); return; }
     if (!this.input.locked && this.isPlaying()) { /* ждём клика по канвасу */ }
 
     this.time += dt; this.worldTime += dt;
@@ -513,11 +640,29 @@ export class Game {
     };
 
     const combatCam = this.state === 'arena' || this.stalker.mode === 'deathmatch';
+    if (this.gozeLeft > 0) {
+      this.gozeLeft -= dt;
+      if (this.gozeLeft <= 0) {
+        this.gozeLeft = 0;
+        p.flying = false;
+        this._wasFlying = false;
+        this.ui.notify('Ты протрезвел, если хочешь ещё полетать, иди в Красное и Коричневое', 6.5, 'info');
+      }
+    }
     const firing = p.update(dt, this.input, this.statics, this.audio, {
-      inside: this.state !== 'outside', noFire: this.state === 'chase' || !!this.elevator,
-      camDist: combatCam ? CFG.camDistCombat : CFG.camDist,
+      inside: this.state !== 'outside' && this.state !== 'apartment', noFire: this.state === 'chase' || !!this.elevator,
+      camDist: this.state === 'apartment' ? 2.15 : combatCam ? CFG.camDistCombat : CFG.camDist,
+      canFly: this.gozeLeft > 0,
     });
-    if (p.landed) { if (p.landed > 6) this.hurtPlayer(Math.min(40, (p.landed - 6) * 6), 'fall'); p.landed = 0; }
+    if (p.flyDenied) {
+      p.flyDenied = false;
+      this.ui.notify('Полёт закрыт. Иди в Красное и Коричневое.', 3.2, 'info');
+    }
+    if (p.flying !== this._wasFlying) {
+      this._wasFlying = p.flying;
+      this.ui.notify(p.flying ? 'Полёт. Лети к светящимся окнам.' : 'Полёт выключен.', 2.2, 'info');
+    }
+    if (p.landed) { if (!p.flying && p.landed > 6) this.hurtPlayer(Math.min(40, (p.landed - 6) * 6), 'fall'); p.landed = 0; }
 
     // След игрока
     this.trailTimer += dt;
@@ -536,6 +681,9 @@ export class Game {
       case 'interior':
         if (this.worldTime > 12 && !this.elevator && rnd.chance(CFG.ghostInteriorChancePerSec * dt)) { this.startChase(); break; }
         if (p.pos.y < -20) p.teleport(this.current.playerStart.x, 0, this.current.playerStart.z);
+        break;
+      case 'apartment':
+        if (p.pos.y < -8 && this.currentApt) p.teleport(this.currentApt.playerStart.x, 0, this.currentApt.playerStart.z);
         break;
       case 'chase': {
         this.corridor.update(p.pos, dt);
@@ -589,6 +737,7 @@ export class Game {
       pulse = Math.max(pulse, Math.max(0, 1 - d / 12) * 0.8);
     }
     u.pulse.value = pulse;
+    this.postfx.mood = this.stalker.state === 'hunt' ? 1 : (this.player.flying ? 2 : 0);
     this.postfx.render(this.scene, this.camera, dt);
   }
 }

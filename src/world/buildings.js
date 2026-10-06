@@ -109,11 +109,12 @@ function porchAABB(e, along0, along1, perp0, perp1, y0, y1) {
 }
 
 // Геометрия дома
-export function buildBuildingGeometry(batch, design, rng) {
+export function buildBuildingGeometry(batch, design, rng, winRng = rng) {
   const F = CFG.floorHeight;
   const tintBase = new THREE.Color(rng.pick(PANEL_TINTS));
   const accent = new THREE.Color(rng.pick(ACCENTS));
   const hasMosaic = rng.chance(0.35);
+  const windows = [];
 
   for (const b of design.blocks) {
     const h = b.y1 - b.y0, w = b.x1 - b.x0, d = b.z1 - b.z0;
@@ -147,16 +148,17 @@ export function buildBuildingGeometry(batch, design, rng) {
         batch.add(boxGeo(sx, b.y0 + F, zz0, sx + 3, b.y1 - 0.5, zz1, rng.chance(0.4) ? accent : 0x9c9c9c), M.CONCRETE);
       }
     }
-    // Светящиеся окна (редко)
+    // Светящиеся окна — в них можно влететь
     if (!b.tech) {
-        const n = rng.int(2, Math.min(10, Math.floor(w * h / 80)));
+        const n = winRng.int(3, Math.min(12, Math.floor(w * h / 55)));
       for (let i = 0; i < n; i++) {
-        const tx = rng.int(0, Math.floor(w / 3) - 1), fl = rng.int(0, b.floors - 1);
+        const tx = winRng.int(0, Math.max(0, Math.floor(w / 3) - 1)), fl = winRng.int(0, Math.max(0, b.floors - 1));
         const wx = b.x0 + tx * 3 + 1.5, wy = b.y0 + fl * F + 1.55;
-        const front = rng.chance(0.5);
-        const g = new THREE.PlaneGeometry(1.3, 1.4);
-        g.rotateY(front ? Math.PI : 0); g.translate(wx, wy, front ? b.z0 - 0.03 : b.z1 + 0.03);
-        batch.add(tint(g, new THREE.Color(0.55 * rng.range(0.6, 1), 0.45 * rng.range(0.6, 1), 0.2)), M.LAMP);
+        const front = winRng.chance(0.5);
+        const g = new THREE.PlaneGeometry(1.45, 1.55);
+        g.rotateY(front ? Math.PI : 0); g.translate(wx, wy, front ? b.z0 - 0.04 : b.z1 + 0.04);
+        batch.add(tint(g, new THREE.Color(0.95, 0.72, 0.28)), M.LAMP);
+        windows.push({ x: wx, y: wy, z: front ? b.z0 : b.z1, nx: 0, nz: front ? -1 : 1, floor: fl });
       }
     }
     // Детали крыши
@@ -191,6 +193,7 @@ export function buildBuildingGeometry(batch, design, rng) {
     const plate = porchAABB(e, 0.02, 0.06, 0.75, 1.05, 1.9, 2.1);
     batch.add(boxGeo(plate.x0, plate.y0, plate.z0, plate.x1, plate.y1, plate.z1, 0x2a3a6a), M.DARK);
   }
+  return { windows };
 }
 
 // Руины после взрыва

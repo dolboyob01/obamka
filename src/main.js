@@ -2,6 +2,7 @@ import { Game } from './game.js';
 
 const canvas = document.getElementById('game');
 const game = new Game(canvas);
+window.__obamka = game;
 
 let last = performance.now();
 function loop(now) {
