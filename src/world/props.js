@@ -109,7 +109,7 @@ export function makeSwingSeat() {
 }
 
 // Пустырь: сугробы, кусты, столбы ЛЭП, брошенная машина
-export function buildTundra(batch, rng, size) {
+export function buildTundra(batch, rng, size, useKit = false) {
   const boxes = [];
   const n = rng.int(4, 9);
   for (let i = 0; i < n; i++) {
@@ -146,7 +146,7 @@ export function buildTundra(batch, rng, size) {
   if (rng.chance(0.22)) {
     const sx = rng.range(4, size - 20), sz = rng.range(4, size - 14);
     const shopFn = rng.chance(0.5) ? buildMagma : buildKrasnoe;
-    const shop = shopFn(batch, sx, sz, sx + 13, sz + 9, rng.pick(['s', 'n', 'w', 'e']));
+    const shop = shopFn(batch, sx, sz, sx + 13, sz + 9, rng.pick(['s', 'n', 'w', 'e']), useKit);
     boxes.push(...shop.boxes);
     shops.push(shop);
   }
@@ -162,7 +162,7 @@ export function buildTundra(batch, rng, size) {
 }
 
 // Открытая улица: проезд, фонари, киоск — воздух между домами
-export function buildStreet(batch, rng, size) {
+export function buildStreet(batch, rng, size, useKit = false) {
   const boxes = [];
   const c = size / 2;
   batch.add(flatPlane(0, c - 4.2, size, c + 4.2, 0.012, true, 4, 0x353538), M.DARK);
@@ -187,11 +187,11 @@ export function buildStreet(batch, rng, size) {
     const kz = north ? c + 8.2 : c - 16.5;
     const front = north ? 's' : 'n';
     const shopFn = rng.chance(0.5) ? buildMagma : buildKrasnoe;
-    const shop = shopFn(batch, kx, kz, kx + 13, kz + 8.5, front);
+    const shop = shopFn(batch, kx, kz, kx + 13, kz + 8.5, front, useKit);
     boxes.push(...shop.boxes);
     shops.push(shop);
   }
-  const t = buildTundra(batch, rng, size);
+  const t = buildTundra(batch, rng, size, useKit);
   boxes.push(...t.boxes.filter(b => b.z0 > c + 7 || b.z1 < c - 7));
   if (t.shops) shops.push(...t.shops);
   return { boxes, shops };

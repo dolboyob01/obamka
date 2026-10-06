@@ -5,12 +5,14 @@ import { Batch, M, flatPlane } from './batch.js';
 import { designBuilding, buildBuildingGeometry, buildRubbleGeometry, buildingBoxes } from './buildings.js';
 import { buildCourtyard, buildTundra, buildStreet, makeCarouselRotor, makeSwingSeat } from './props.js';
 import { buildMagma, buildKrasnoe } from './shops.js';
+import { attachWorldKits, shopKitPlacement } from './kits.js';
 
 export class OutdoorWorld {
-  constructor(scene, materials, statics, textures) {
+  constructor(scene, materials, statics, textures, kits = null) {
     this.scene = scene;
     this.materials = materials;
     this.statics = statics;
+    this.kits = kits;
     this.group = new THREE.Group();
     scene.add(this.group);
     this.chunks = new Map();
@@ -49,11 +51,15 @@ export class OutdoorWorld {
 
   chunkType(cx, cz) {
     if (cx === 0 && cz === 0) return 'courtyard';
-    if (cx === 0 && cz === -1) return 'building';
+    // Кольцо вокруг двора: улицы на стороны света (выезд), дома по диагоналям (силуэт, не колодец).
+    if (Math.abs(cx) <= 1 && Math.abs(cz) <= 1) {
+      if ((cx === 0) !== (cz === 0)) return 'street';
+      return 'building';
+    }
     const h = hash2(cx, cz, 91) / 4294967296;
-    if (h < 0.26) return 'building';
-    if (h < 0.38) return 'courtyard';
-    if (h < 0.56) return 'street';
+    if (h < 0.36) return 'building';
+    if (h < 0.48) return 'courtyard';
+    if (h < 0.70) return 'street';
     return 'tundra';
   }
 
@@ -129,13 +135,21 @@ export class OutdoorWorld {
     const batch = new Batch();
     const chunk = { cx, cz, key, type, group: new THREE.Group(), entrances: [], windows: [], shops: [], carousel: null };
     let boxes = [], k = 0, design = null;
+    const modules = [];
+    const shopKit = !!(this.kits?.has('shop_magma') && this.kits?.has('shop_kik'));
+    const buildingKit = !!this.kits?.has('panel_wall');
+
+    const takeShop = (shop) => {
+      this.registerShop(chunk, cx, cz, type === 'building' ? k : 0, shop);
+      if (shop?.kit) modules.push(shopKitPlacement(shop.kit, shop.x0, shop.z0, shop.x1, shop.z1, shop.front));
+    };
 
     if (type === 'building') {
       k = this.facingFor(cx, cz, rng);
       design = designBuilding(rng, S);
       const rubble = this.destroyed.has(key);
       const winRng = new Rng(hash2(cx, cz, 771 + (this.sessionSeed || 0)));
-      const built = rubble ? (buildRubbleGeometry(batch, design, rng), { windows: [] }) : buildBuildingGeometry(batch, design, rng, winRng);
+      const built = rubble ? (buildRubbleGeometry(batch, design, rng), { windows: [] }) : buildBuildingGeometry(batch, design, rng, winRng, buildingKit ? modules : null);
       boxes = buildingBoxes(design, rubble);
       if (!rubble) {
         design.entrances.forEach((e, i) => {
@@ -154,24 +168,34 @@ export class OutdoorWorld {
         }
       }
       // немного пустыря вокруг дома
-      const t = buildTundra(batch, new Rng(hash2(cx, cz, 5)), S);
+      const t = buildTundra(batch, new Rng(hash2(cx, cz, 5)), S, shopKit);
       boxes = boxes.concat(t.boxes.filter(b => !design.blocks.some(bl => b.x1 > bl.x0 - 3 && b.x0 < bl.x1 + 3 && b.z1 > bl.z0 - 3 && b.z0 < bl.z1 + 3)));
-      for (const shop of t.shops || []) this.registerShop(chunk, cx, cz, k, shop);
+      for (const shop of t.shops || []) takeShop(shop);
     } else if (type === 'courtyard') {
       const r = buildCourtyard(batch, rng, S, false);
       boxes = r.boxes;
       if (cx === 0 && cz === 0) {
-        const magma = buildMagma(batch, 5, 8, 20.5, 18.2, 'n');
-        const kik = buildKrasnoe(batch, 26.5, 8.2, 43, 17.6, 'n');
+        const magma = buildMagma(batch, 5, 8, 20.5, 18.2, 'n', shopKit);
+        const kik = buildKrasnoe(batch, 26.5, 8.2, 43, 17.6, 'n', shopKit);
         boxes.push(...magma.boxes, ...kik.boxes);
         this.registerShop(chunk, cx, cz, 0, magma);
         this.registerShop(chunk, cx, cz, 0, kik);
+        if (magma.kit) modules.push(shopKitPlacement(magma.kit, magma.x0, magma.z0, magma.x1, magma.z1, magma.front));
+        if (kik.kit) modules.push(shopKitPlacement(kik.kit, kik.x0, kik.z0, kik.x1, kik.z1, kik.front));
+        modules.push(
+          { name: 'dumpster', x: 21.2, y: 0, z: 19.4, yaw: 0.15 },
+          { name: 'dumpster', x: 22.6, y: 0, z: 19.6, yaw: -0.08 },
+          { name: 'bench', x: 23.4, y: 0, z: 26.2, yaw: 0.2 },
+          { name: 'bench', x: 29.8, y: 0, z: 24.0, yaw: -0.7 },
+          { name: 'yard_lamp', x: 17.8, y: 0, z: 27.2, yaw: 0 },
+          { name: 'yard_lamp', x: 32.4, y: 0, z: 28.0, yaw: 0.2 },
+        );
       } else if (rng.chance(0.55)) {
         const shopFn = rng.chance(0.5) ? buildMagma : buildKrasnoe;
         const x0 = rng.range(4, 8);
-        const shop = shopFn(batch, x0, 2, x0 + 13, 11, rng.pick(['s', 'n']));
+        const shop = shopFn(batch, x0, 2, x0 + 13, 11, rng.pick(['s', 'n']), shopKit);
         boxes.push(...shop.boxes);
-        this.registerShop(chunk, cx, cz, 0, shop);
+        takeShop(shop);
       }
       const cw = this.toWorld(cx, cz, 0, r.carousel.x, r.carousel.z);
       const rotor = makeCarouselRotor(); rotor.position.set(cw.x, 0, cw.z);
@@ -186,13 +210,13 @@ export class OutdoorWorld {
         this.swings = this.swings || []; this.swings.push(chunk.swing);
       }
     } else if (type === 'street') {
-      const st = buildStreet(batch, rng, S);
+      const st = buildStreet(batch, rng, S, shopKit);
       boxes = st.boxes;
-      for (const shop of st.shops || []) this.registerShop(chunk, cx, cz, 0, shop);
+      for (const shop of st.shops || []) takeShop(shop);
     } else {
-      const tn = buildTundra(batch, rng, S);
+      const tn = buildTundra(batch, rng, S, shopKit);
       boxes = tn.boxes;
-      for (const shop of tn.shops || []) this.registerShop(chunk, cx, cz, 0, shop);
+      for (const shop of tn.shops || []) takeShop(shop);
     }
 
     // Широкие дороги между чанками — сетка улиц
@@ -202,6 +226,12 @@ export class OutdoorWorld {
     const mesh = batch.build(this.materials);
     const c = S / 2;
     if (mesh) { mesh.position.set(-c, 0, -c); chunk.group.add(mesh); }
+    if (modules.length && this.kits) {
+      const kitGroup = new THREE.Group();
+      kitGroup.position.set(-c, 0, -c);
+      attachWorldKits(kitGroup, modules, this.kits, this.materials);
+      chunk.group.add(kitGroup);
+    }
     chunk.group.rotation.y = k * Math.PI / 2;
     chunk.group.position.set(cx * S + c, 0, cz * S + c);
     this.group.add(chunk.group);

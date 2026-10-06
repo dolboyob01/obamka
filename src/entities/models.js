@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import * as BGU from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Rng } from '../rng.js';
+import { cloneKit } from '../assets/gltf.js';
 
 // Сборка гуманоида: цилиндры и сферы, не кубы.
 function colored(g, color, x, y, z, rx = 0, ry = 0, rz = 0, pivotY = 0) {
@@ -18,10 +19,10 @@ function box(w, h, d, color, x, y, z, rx = 0, ry = 0, rz = 0, pivotY = 0) {
   return colored(new THREE.BoxGeometry(w, h, d), color, x, y, z, rx, ry, rz, pivotY);
 }
 function cyl(rt, rb, h, color, x, y, z, rx = 0, ry = 0, rz = 0, pivotY = 0) {
-  return colored(new THREE.CylinderGeometry(rt, rb, h, 8), color, x, y, z, rx, ry, rz, pivotY);
+  return colored(new THREE.CylinderGeometry(rt, rb, h, 12), color, x, y, z, rx, ry, rz, pivotY);
 }
 function ball(r, color, x, y, z, rx = 0, ry = 0, rz = 0) {
-  return colored(new THREE.SphereGeometry(r, 8, 6), color, x, y, z, rx, ry, rz, 0);
+  return colored(new THREE.SphereGeometry(r, 12, 8), color, x, y, z, rx, ry, rz, 0);
 }
 
 export function buildHumanoid(p, pose, colors) {
@@ -73,15 +74,16 @@ export const VARIANTS = (() => {
 
 // Инстансированный рендер множества существ: на вариант — 2 кадра (шаг A / шаг B) + стойка
 export class EntityRenderer {
-  constructor(scene, capacity = 1100) {
+  constructor(scene, capacity = 1100, kits = null) {
     this.capacity = capacity;
     this.meshes = []; // [variant][frame]
-    const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+    const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
     const frames = [{ swing: 0.5 }, { swing: -0.5 }, { swing: 0 }];
-    for (const v of VARIANTS) {
+    for (let vi = 0; vi < VARIANTS.length; vi++) {
+      const v = VARIANTS[vi];
       const row = [];
-      for (const f of frames) {
-        const g = buildHumanoid(v.p, f, v.colors);
+      for (let fi = 0; fi < frames.length; fi++) {
+        const g = buildHumanoid(v.p, frames[fi], v.colors);
         const im = new THREE.InstancedMesh(g, mat, capacity);
         im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         im.count = 0; im.frustumCulled = false;
@@ -94,7 +96,7 @@ export class EntityRenderer {
   }
 
   // entities: массив объектов { pos:{x,y,z}, yaw, variant, anim(фаза 0..1), moving, scale }
-  update(entities) {
+  update(entities, _dt) {
     for (const row of this.meshes) for (const im of row) im.count = 0;
     for (const e of entities) {
       if (e.dead) continue;
@@ -135,10 +137,31 @@ export function buildGhost() {
   return g;
 }
 
+function wireStalker(root) {
+  const eyes = [];
+  let body = null;
+  root.traverse((o) => {
+    if (o.name === 'body') body = o;
+    if (o.name === 'eyeL' || o.name === 'eyeR' || o.material?.name === 'eye') eyes.push(o);
+  });
+  if (!body) body = root.children[0];
+  for (const e of eyes) {
+    if (e.material) e.material = e.material.clone();
+  }
+  root.userData = { eyes, body };
+  return eyes.length > 0;
+}
+
 // --------- Преследователь (класс 5) ----------
-export function buildStalker() {
+export function buildStalker(kits) {
+  const kit = kits?.get('stalker');
+  if (kit) {
+    const g = cloneKit(kit, true);
+    if (wireStalker(g)) return g;
+  }
   const g = new THREE.Group();
   const body = new THREE.Group();
+  body.name = 'body';
   const mat = new THREE.MeshLambertMaterial({ color: 0x0b0b0d });
   const legs = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 1.8, 8), mat); legs.position.y = 0.9; body.add(legs);
   const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.38, 1.15, 8), mat); torso.position.y = 2.35; body.add(torso);
@@ -152,12 +175,31 @@ export function buildStalker() {
   }
   body.scale.setScalar(5);
   g.add(body);
-  g.userData = { eyes };
+  g.userData = { eyes, body };
   return g;
 }
 
+function wirePlayer(root) {
+  const map = {};
+  root.traverse((o) => { if (o.name) map[o.name] = o; });
+  root.userData = {
+    legL: map.legL, legR: map.legR, armL: map.armL, armR: map.armR,
+    torso: map.torso, head: map.head, cap: map.cap, visor: map.visor,
+    chain: map.chain, pistol: map.pistol, minigun: map.minigun, gun: map.gun,
+  };
+  const u = root.userData;
+  if (u.minigun) u.minigun.visible = false;
+  if (u.pistol) u.pistol.visible = true;
+  return u.legL && u.legR && u.armL && u.armR && u.torso && u.head && u.gun && u.pistol && u.minigun;
+}
+
 // --------- Игрок (отдалённо напоминает CJ) ----------
-export function buildPlayer() {
+export function buildPlayer(kits) {
+  const kit = kits?.get('player');
+  if (kit) {
+    const g = cloneKit(kit, true);
+    if (wirePlayer(g)) return g;
+  }
   const g = new THREE.Group();
   const skin = new THREE.MeshLambertMaterial({ color: 0x7a4e34 });
   const shirt = new THREE.MeshLambertMaterial({ color: 0xf2f0e8 });
@@ -167,26 +209,33 @@ export function buildPlayer() {
   const gold = new THREE.MeshLambertMaterial({ color: 0xc9a227 });
   const gunMat = new THREE.MeshLambertMaterial({ color: 0x222226 });
   const mk = (mesh, x, y, z) => { mesh.position.set(x, y, z); return mesh; };
-  const legL = new THREE.Group(); legL.position.set(-0.14, 0.9, 0);
+  const legL = new THREE.Group(); legL.name = 'legL'; legL.position.set(-0.14, 0.9, 0);
   legL.add(mk(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.09, 0.85, 8), pants), 0, -0.42, 0));
   legL.add(mk(new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), shoe), 0, -0.86, 0.06));
-  const legR = new THREE.Group(); legR.position.set(0.14, 0.9, 0);
+  const legR = new THREE.Group(); legR.name = 'legR'; legR.position.set(0.14, 0.9, 0);
   legR.add(mk(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.09, 0.85, 8), pants), 0, -0.42, 0));
   legR.add(mk(new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), shoe), 0, -0.86, 0.06));
   const torso = mk(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.62, 10), shirt), 0, 1.22, 0);
+  torso.name = 'torso';
   const chain = mk(new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.018, 6, 12), gold), 0, 1.42, 0.08);
+  chain.name = 'chain';
   chain.rotation.x = 0.9;
-  const armL = new THREE.Group(); armL.position.set(-0.32, 1.48, 0);
+  const armL = new THREE.Group(); armL.name = 'armL'; armL.position.set(-0.32, 1.48, 0);
   armL.add(mk(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.06, 0.7, 8), skin), 0, -0.32, 0));
-  const armR = new THREE.Group(); armR.position.set(0.32, 1.48, 0);
+  const armR = new THREE.Group(); armR.name = 'armR'; armR.position.set(0.32, 1.48, 0);
   armR.add(mk(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.06, 0.7, 8), skin), 0, -0.32, 0));
   const head = mk(new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), skin), 0, 1.74, 0);
+  head.name = 'head';
   const cap = mk(new THREE.Mesh(new THREE.SphereGeometry(0.21, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), hair), 0, 1.8, 0);
+  cap.name = 'cap';
   const visor = mk(new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.03, 0.12), hair), 0, 1.88, 0.14);
+  visor.name = 'visor';
   g.add(legL, legR, torso, chain, armL, armR, head, cap, visor);
-  const gun = new THREE.Group(); gun.position.set(0, -0.58, 0.12);
+  const gun = new THREE.Group(); gun.name = 'gun'; gun.position.set(0, -0.58, 0.12);
   const pistol = mk(new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.12, 0.26), gunMat), 0, 0, 0.1);
+  pistol.name = 'pistol';
   const minigun = new THREE.Group();
+  minigun.name = 'minigun';
   minigun.add(mk(new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.16, 0.36, 8), new THREE.MeshLambertMaterial({ color: 0x333338 })), -0.18, 0.04, 0.08));
   minigun.children[0].rotation.x = Math.PI / 2;
   for (let i = 0; i < 6; i++) {

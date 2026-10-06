@@ -17,9 +17,10 @@ import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { UI } from './ui.js';
 import { PostFX } from './postfx.js';
+import { applyScanMaps } from './assets/look.js';
 
 const FOG = {
-  outside: { color: 0x8a9098, density: 0.010 },
+  outside: { color: 0x6e747c, density: 0.008 },
   interior: { color: 0x0c0c10, density: 0.048 },
   chase: { color: 0x050506, density: 0.07 },
   arena: { color: 0x7a5850, density: 0.0035 },
@@ -27,11 +28,15 @@ const FOG = {
 };
 
 export class Game {
-  constructor(canvas) {
+  constructor(canvas, kits = null) {
     this.canvas = canvas;
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(1);
+    this.kits = kits;
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
     this.renderer.setSize(window.innerWidth, window.innerHeight, false);
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 0.95;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(CFG.fov, window.innerWidth / window.innerHeight, 0.1, 260);
     this.postfx = new PostFX(this.renderer);
@@ -42,18 +47,18 @@ export class Game {
     this.materials = makeMaterials(this.textures);
     this.statics = new StaticWorld();
 
-    this.outdoor = new OutdoorWorld(this.scene, this.materials, this.statics, this.textures);
+    this.outdoor = new OutdoorWorld(this.scene, this.materials, this.statics, this.textures, kits);
     this.corridor = new ChaseCorridor(this.scene, this.materials, this.statics);
     this.arena = new Arena(this.scene, this.materials, this.statics);
-    this.population = new Population(this.scene);
-    this.player = new Player(this.scene, this.camera);
+    this.population = new Population(this.scene, kits);
+    this.player = new Player(this.scene, this.camera, kits);
     this.ghost = new GhostChase(this.scene, this.corridor);
-    this.stalker = new Stalker(this.scene);
+    this.stalker = new Stalker(this.scene, kits);
 
     // Свет: пасмурный день тундры — серый, но читаемый
-    this.hemi = new THREE.HemisphereLight(0xc8ccd2, 0x5c5a56, 3.6); this.scene.add(this.hemi);
-    this.ambient = new THREE.AmbientLight(0x8a8e94, 1.55); this.scene.add(this.ambient);
-    this.dir = new THREE.DirectionalLight(0xd4d8de, 2.15); this.dir.position.set(40, 80, 30); this.scene.add(this.dir);
+    this.hemi = new THREE.HemisphereLight(0xb8c4d0, 0x4a463e, 1.35); this.scene.add(this.hemi);
+    this.ambient = new THREE.AmbientLight(0x6a6e74, 0.42); this.scene.add(this.ambient);
+    this.dir = new THREE.DirectionalLight(0xffd4a8, 1.15); this.dir.position.set(28, 22, -48); this.scene.add(this.dir);
     this.points = [];
     for (let i = 0; i < 5; i++) { const l = new THREE.PointLight(0xffd090, 0, 32, 1.2); this.scene.add(l); this.points.push(l); }
     this.muzzle = new THREE.PointLight(0xffc070, 0, 8, 2); this.scene.add(this.muzzle);
@@ -68,6 +73,7 @@ export class Game {
     this.savedOutside = { x: 0, z: 3, yaw: Math.PI };
     this.elevator = null; this.plant = 0; this.planting = false;
     this.worldTime = 0; this.heartbeat = 0; this.stats = { kills: 0, buildings: 0 };
+    this.envLook = null;
 
     document.documentElement.classList.add('start-open');
     document.body.classList.add('start-open');
@@ -77,6 +83,33 @@ export class Game {
     this.player.teleport(this.savedOutside.x, 0, this.savedOutside.z, Math.PI);
     this.bindUI();
     window.addEventListener('resize', () => this.resize());
+  }
+
+  applyLook(maps, env) {
+    applyScanMaps(this.textures, this.materials, maps);
+    this.envLook = env;
+    this.applyEnv();
+  }
+
+  applyEnv() {
+    if (!this.envLook) return;
+    this.scene.environment = this.envLook.env;
+    if (this.mode === 'outside') {
+      this.scene.background = this.envLook.hdr;
+      this.scene.backgroundBlurriness = 0.14;
+      this.scene.backgroundIntensity = 0.58;
+    } else {
+      const f = FOG[this.mode] || FOG.interior;
+      this.scene.background = new THREE.Color(f.color);
+      this.scene.backgroundBlurriness = 0;
+      this.scene.backgroundIntensity = 1;
+    }
+  }
+
+  setChars(chars) {
+    this.player.setChars(chars);
+    this.population.setChars(chars);
+    this.stalker.setChars(chars);
   }
 
   resize() {
@@ -140,16 +173,17 @@ export class Game {
   setMode(mode) {
     const f = FOG[mode];
     this.scene.fog = new THREE.FogExp2(f.color, f.density);
-    this.scene.background = new THREE.Color(f.color);
     this.mode = mode;
+    this.applyEnv();
+    if (!this.envLook || mode !== 'outside') this.scene.background = new THREE.Color(f.color);
     this.outdoor.setVisible(mode === 'outside');
     if (this.interiorGroup) this.interiorGroup.visible = mode === 'interior' || mode === 'apartment';
     if (mode !== 'chase') this.corridor.group.visible = false;
     if (mode !== 'arena') this.arena.group.visible = false;
-    this.hemi.intensity = mode === 'outside' ? 3.6 : mode === 'arena' ? 3.8 : mode === 'apartment' ? 2.4 : mode === 'interior' ? 1.2 : 0.65;
-    this.hemi.color.set(mode === 'arena' ? 0xf0c8b8 : mode === 'apartment' ? 0xe8d2b8 : 0xc8ccd2);
-    this.ambient.intensity = mode === 'outside' ? 1.55 : mode === 'arena' ? 2.6 : mode === 'apartment' ? 1.15 : 0.32;
-    this.dir.intensity = mode === 'outside' ? 2.15 : mode === 'arena' ? 2.0 : 0;
+    this.hemi.intensity = mode === 'outside' ? 1.85 : mode === 'arena' ? 3.8 : mode === 'apartment' ? 2.4 : mode === 'interior' ? 1.2 : 0.65;
+    this.hemi.color.set(mode === 'arena' ? 0xf0c8b8 : mode === 'apartment' ? 0xe8d2b8 : 0xc8d0d8);
+    this.ambient.intensity = mode === 'outside' ? 0.55 : mode === 'arena' ? 2.6 : mode === 'apartment' ? 1.15 : 0.32;
+    this.dir.intensity = mode === 'outside' ? 1.25 : mode === 'arena' ? 2.0 : 0;
     this.statics.hasDefaultGround = true;
     this.statics.defaultGround = (mode === 'outside' || mode === 'arena') ? 0 : -1000;
     this.audio.setWind(mode === 'outside' ? 0.12 : 0.03);
@@ -219,7 +253,7 @@ export class Game {
     this.savedOutside = { x: win.x + win.nx * 2.4, z: win.z + win.nz * 2.4, y: 0, yaw: Math.atan2(-win.nx, -win.nz) };
     let apt = this.apartments.get(win.key);
     if (!apt) {
-      apt = generateApartment(win.key.split('').reduce((a, c) => a + c.charCodeAt(0), 1), this.materials);
+      apt = generateApartment(win.key.split('').reduce((a, c) => a + c.charCodeAt(0), 1), this.materials, this.kits);
       apt.window = win;
       this.apartments.set(win.key, apt);
     }

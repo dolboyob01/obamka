@@ -8,9 +8,9 @@ function canvasTex(size, draw, repeat = true, w, h) {
   const ctx = c.getContext('2d');
   draw(ctx, c.width, c.height);
   const t = new THREE.CanvasTexture(c);
-  t.magFilter = THREE.NearestFilter;
-  t.minFilter = THREE.NearestFilter;
-  t.generateMipmaps = false;
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
   t.colorSpace = THREE.SRGBColorSpace;
   if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return t;
@@ -29,25 +29,16 @@ export function makeTextures() {
   const rng = new Rng(777);
   const T = {};
 
-  // Фасад: одна панель 3×3 м с окном. Светится редкое окно.
-  T.facade = canvasTex(64, (ctx, s) => {
+  // Фасад: панель 3×3 м без нарисованного окна — окно ставится мешем.
+  T.facade = canvasTex(128, (ctx, s) => {
     noise(ctx, s, rng, 142, 22, 2);
-    // швы панелей
     ctx.fillStyle = '#5a5c5e';
     ctx.fillRect(0, 0, s, 2); ctx.fillRect(0, 0, 2, s);
-    // потёки
     ctx.fillStyle = 'rgba(40,40,44,0.5)';
     for (let i = 0; i < 5; i++) { const x = rng.int(4, s - 4); ctx.fillRect(x, rng.int(0, 20), 1, rng.int(10, 40)); }
-    // окно
-    ctx.fillStyle = '#1b1c20';
-    ctx.fillRect(18, 16, 28, 30);
-    ctx.fillStyle = '#3a3b40';
-    ctx.fillRect(31, 16, 2, 30); ctx.fillRect(18, 30, 28, 2);
-    ctx.fillStyle = '#6a6c70';
-    ctx.fillRect(16, 46, 32, 2); // подоконник
   });
 
-  T.facadeLit = canvasTex(64, (ctx, s) => {
+  T.facadeLit = canvasTex(128, (ctx, s) => {
     noise(ctx, s, rng, 140, 22, 2);
     ctx.fillStyle = '#4a4c4e'; ctx.fillRect(0, 0, s, 2); ctx.fillRect(0, 0, 2, s);
     ctx.fillStyle = '#8f7a3a'; ctx.fillRect(18, 16, 28, 30);
@@ -56,7 +47,7 @@ export function makeTextures() {
   });
 
   // Глухая бетонная панель
-  T.concrete = canvasTex(64, (ctx, s) => {
+  T.concrete = canvasTex(128, (ctx, s) => {
     noise(ctx, s, rng, 142, 20, 2);
     ctx.fillStyle = '#4a4c4e'; ctx.fillRect(0, 0, s, 2); ctx.fillRect(0, 0, 2, s);
     ctx.fillStyle = 'rgba(30,30,34,0.35)';
@@ -64,14 +55,14 @@ export function makeTextures() {
   });
 
   // Крыша — рубероид
-  T.roof = canvasTex(64, (ctx, s) => {
+  T.roof = canvasTex(128, (ctx, s) => {
     noise(ctx, s, rng, 48, 14, 2);
     ctx.fillStyle = 'rgba(255,255,255,0.08)';
     for (let i = 0; i < 20; i++) ctx.fillRect(rng.int(0, s), rng.int(0, s), rng.int(3, 12), 1);
   });
 
   // Грязный снег / тундра
-  T.ground = canvasTex(128, (ctx, s) => {
+  T.ground = canvasTex(256, (ctx, s) => {
     noise(ctx, s, rng, 178, 26, 2);
     for (let i = 0; i < 60; i++) {
       const v = rng.int(100, 140);
@@ -84,7 +75,7 @@ export function makeTextures() {
   });
 
   // Стена подъезда: низ — масляная краска, верх — побелка
-  T.wallInt = canvasTex(64, (ctx, s) => {
+  T.wallInt = canvasTex(128, (ctx, s) => {
     noise(ctx, s, rng, 170, 24, 2);
     const col = rng.pick(['#3f5a4a', '#3b4f66', '#5a4a3a', '#4e5f3f']);
     ctx.fillStyle = col; ctx.fillRect(0, 28, s, 36);
@@ -96,7 +87,7 @@ export function makeTextures() {
   });
 
   // Пол подъезда — бетон/плитка
-  T.floorInt = canvasTex(64, (ctx, s) => {
+  T.floorInt = canvasTex(128, (ctx, s) => {
     noise(ctx, s, rng, 78, 20, 2);
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
     for (let i = 0; i < s; i += 16) { ctx.fillRect(i, 0, 1, s); ctx.fillRect(0, i, s, 1); }
@@ -167,7 +158,7 @@ export function makeTextures() {
   }, false, 512, 128);
 
   // Мозаика соцреализма для торцов домов
-  T.mosaic = canvasTex(64, (ctx, s) => {
+  T.mosaic = canvasTex(128, (ctx, s) => {
     noise(ctx, s, rng, 110, 20, 2);
     const cols = ['#3a6a7a', '#7a4a3a', '#3a5a7a', '#8a7a3a', '#3a6a4a', '#5a3a6a', '#9a9a9a'];
     for (let y = 8; y < s - 8; y += 4)

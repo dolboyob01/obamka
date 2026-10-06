@@ -5,21 +5,25 @@ import * as BGU from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 export const M = { FACADE: 0, CONCRETE: 1, ROOF: 2, DOOR: 3, MOSAIC: 4, LAMP: 5, DARK: 6, WALLINT: 7, FLOORINT: 8, CEILINT: 9, ELEVATOR: 10, GROUND: 11, ARENA: 12, SIGN_MAGMA: 13, SIGN_KIK: 14 };
 
 export function makeMaterials(T) {
-  const lam = (map, extra = {}) => new THREE.MeshLambertMaterial({ map, vertexColors: true, ...extra });
+  const std = (map, extra = {}) => new THREE.MeshStandardMaterial({
+    map, vertexColors: true, roughness: 0.88, metalness: 0, envMapIntensity: 0.5, ...extra,
+  });
   const mats = [];
-  mats[M.FACADE] = lam(T.facade);
-  mats[M.CONCRETE] = lam(T.concrete);
-  mats[M.ROOF] = lam(T.roof);
-  mats[M.DOOR] = lam(T.door);
-  mats[M.MOSAIC] = lam(T.mosaic);
-  mats[M.LAMP] = new THREE.MeshBasicMaterial({ vertexColors: true });
-  mats[M.DARK] = new THREE.MeshLambertMaterial({ vertexColors: true });
-  mats[M.WALLINT] = lam(T.wallInt);
-  mats[M.FLOORINT] = lam(T.floorInt);
-  mats[M.CEILINT] = lam(T.ceilInt);
-  mats[M.ELEVATOR] = lam(T.elevator);
-  mats[M.GROUND] = lam(T.ground);
-  mats[M.ARENA] = lam(T.arenaFloor);
+  mats[M.FACADE] = std(T.facade);
+  mats[M.CONCRETE] = std(T.concrete);
+  mats[M.ROOF] = std(T.roof, { roughness: 0.95 });
+  mats[M.DOOR] = std(T.door, { roughness: 0.72 });
+  mats[M.MOSAIC] = std(T.mosaic);
+  mats[M.LAMP] = new THREE.MeshStandardMaterial({
+    vertexColors: true, emissive: 0xffc56a, emissiveIntensity: 1.35, roughness: 1, metalness: 0, envMapIntensity: 0,
+  });
+  mats[M.DARK] = std(null, { color: 0x2a2a2c, roughness: 0.92 });
+  mats[M.WALLINT] = std(T.wallInt, { envMapIntensity: 0.12 });
+  mats[M.FLOORINT] = std(T.floorInt, { envMapIntensity: 0.12 });
+  mats[M.CEILINT] = std(T.ceilInt, { envMapIntensity: 0.08 });
+  mats[M.ELEVATOR] = std(T.elevator, { metalness: 0.15, roughness: 0.55 });
+  mats[M.GROUND] = std(T.ground, { roughness: 0.94 });
+  mats[M.ARENA] = std(T.arenaFloor);
   mats[M.SIGN_MAGMA] = new THREE.MeshBasicMaterial({ map: T.signMagma });
   mats[M.SIGN_KIK] = new THREE.MeshBasicMaterial({ map: T.signKik });
   return mats;

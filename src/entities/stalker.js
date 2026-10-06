@@ -1,5 +1,6 @@
 import { CFG } from '../config.js';
 import { buildStalker } from './models.js';
+import { makeStalkerActor } from './actor.js';
 import { rnd } from '../rng.js';
 
 // Класс 5: Преследователь. Статусы: спит / бродит / ищет игрока.
@@ -13,9 +14,11 @@ export const STALKER_STATUS = {
 const WANDER = ['food', 'belenka', 'dodep'];
 
 export class Stalker {
-  constructor(scene) {
+  constructor(scene, kits = null, chars = null) {
     this.scene = scene;
-    this.mesh = buildStalker(); this.mesh.visible = false; scene.add(this.mesh);
+    this.actor = makeStalkerActor(chars);
+    this.mesh = this.actor ? this.actor.root : buildStalker(kits);
+    this.mesh.visible = false; scene.add(this.mesh);
     this.enabled = true;
     this.state = 'sleep';
     this.timer = rnd.range(CFG.stalkerSleep[0] * 0.7, CFG.stalkerSleep[1] * 0.9);
@@ -28,6 +31,17 @@ export class Stalker {
     this.visibleTimer = 0;
     this.aerial = false;
     this.haloT = 0;
+  }
+
+  setChars(chars) {
+    if (this.actor) return;
+    const a = makeStalkerActor(chars);
+    if (!a) return;
+    this.scene.remove(this.mesh);
+    this.actor = a;
+    this.mesh = a.root;
+    this.mesh.visible = false;
+    this.scene.add(this.mesh);
   }
 
   setEnabled(v) {
@@ -70,8 +84,16 @@ export class Stalker {
     const p = game.player;
     this.pulseEyes(dt);
     const indoor = game.state === 'apartment';
-    const body = this.mesh.children[0];
-    if (body) body.scale.setScalar(indoor ? 1 : 5);
+    if (this.actor) {
+      if (indoor) this.actor.setScale(1);
+      else this.actor.setScale(4.2, 6.4, 4.2);
+      const moving = this.state === 'hunt' || WANDER.includes(this.state);
+      this.actor.setMove(moving && this.mesh.visible ? (this.state === 'hunt' ? 3.2 : 1.4) : 0, this.state === 'hunt', true);
+      this.actor.update(dt);
+    } else {
+      const body = this.mesh.userData.body || this.mesh.children[0];
+      if (body) body.scale.setScalar(indoor ? 1 : 5);
+    }
 
     if (this.state !== 'hunt') {
       this.timer -= dt;
@@ -92,8 +114,8 @@ export class Stalker {
         if (dd > 60) { this.pos.x = this.foodWander.x; this.pos.z = this.foodWander.z; }
         else if (dd > 0.5) { this.pos.x += dx / dd * 1.2 * dt; this.pos.z += dz / dd * 1.2 * dt; }
         this.pos.y = game.statics.groundAt(this.pos.x, this.pos.z, 0, 0.3);
-        this.mesh.position.set(this.pos.x, this.pos.y, this.pos.z);
-        this.mesh.rotation.y = Math.atan2(dx, dz);
+        this.mesh.position.set(this.pos.x, this.pos.y + (this.actor?.lift || 0), this.pos.z);
+        this.mesh.rotation.y = Math.atan2(dx, dz) + (this.actor?.yawOffset ?? 0);
         this.mesh.visible = !game.statics.pointInside(this.pos.x, 1, this.pos.z);
       } else this.mesh.visible = false;
       return;
@@ -108,8 +130,8 @@ export class Stalker {
       this.pos.y += dy / dist * spd * dt;
       this.pos.z += dz / dist * spd * dt;
       this.mesh.visible = true;
-      this.mesh.position.set(this.pos.x, this.pos.y, this.pos.z);
-      this.mesh.rotation.y = Math.atan2(dx, dz);
+      this.mesh.position.set(this.pos.x, this.pos.y + (this.actor?.lift || 0) * this.mesh.scale.y, this.pos.z);
+      this.mesh.rotation.y = Math.atan2(dx, dz) + (this.actor?.yawOffset ?? 0);
       this.cooldown -= dt;
       if (dist < 4.6 && this.cooldown <= 0) {
         this.cooldown = 1.5;
@@ -134,8 +156,8 @@ export class Stalker {
       this.mesh.visible = true;
     }
     const dx = p.pos.x - this.pos.x, dz = p.pos.z - this.pos.z, dist = Math.hypot(dx, dz);
-    this.mesh.position.set(this.pos.x, this.pos.y, this.pos.z);
-    this.mesh.rotation.y = Math.atan2(dx, dz);
+    this.mesh.position.set(this.pos.x, this.pos.y + (this.actor?.lift || 0) * this.mesh.scale.y, this.pos.z);
+    this.mesh.rotation.y = Math.atan2(dx, dz) + (this.actor?.yawOffset ?? 0);
     this.cooldown -= dt;
     const hitR = game.state === 'apartment' ? 1.55 : 4.4;
     if (dist < hitR && Math.abs(p.pos.y - this.pos.y) < 9 && this.cooldown <= 0) {

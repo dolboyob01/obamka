@@ -108,30 +108,68 @@ function porchAABB(e, along0, along1, perp0, perp1, y0, y1) {
   return { x0: Math.min(...xs), z0: Math.min(...zs), x1: Math.max(...xs), z1: Math.max(...zs), y0, y1 };
 }
 
+const PANEL_W = 3, PANEL_H = 3;
+
+function tilePanels(items, b, face, color) {
+  const floors = Math.max(1, b.floors || Math.round((b.y1 - b.y0) / PANEL_H));
+  let along0, length, axis, yaw, fixed;
+  if (face === 's') { along0 = b.x0; length = b.x1 - b.x0; axis = 'x'; yaw = Math.PI; fixed = b.z0; }
+  else if (face === 'n') { along0 = b.x0; length = b.x1 - b.x0; axis = 'x'; yaw = 0; fixed = b.z1; }
+  else if (face === 'e') { along0 = b.z0; length = b.z1 - b.z0; axis = 'z'; yaw = Math.PI / 2; fixed = b.x1; }
+  else { along0 = b.z0; length = b.z1 - b.z0; axis = 'z'; yaw = -Math.PI / 2; fixed = b.x0; }
+  const cols = Math.max(1, Math.floor(length / PANEL_W));
+  const used = cols * PANEL_W;
+  const pad = (length - used) / 2;
+  for (let col = 0; col < cols; col++) {
+    const t = pad + col * PANEL_W + PANEL_W / 2;
+    for (let row = 0; row < floors; row++) {
+      items.push({
+        name: 'panel_wall',
+        x: axis === 'x' ? along0 + t : fixed,
+        y: b.y0 + row * PANEL_H,
+        z: axis === 'z' ? along0 + t : fixed,
+        yaw,
+      });
+    }
+  }
+  return pad;
+}
+
 // Геометрия дома
-export function buildBuildingGeometry(batch, design, rng, winRng = rng) {
+export function buildBuildingGeometry(batch, design, rng, winRng = rng, modules = null) {
   const F = CFG.floorHeight;
   const tintBase = new THREE.Color(rng.pick(PANEL_TINTS));
   const accent = new THREE.Color(rng.pick(ACCENTS));
   const hasMosaic = rng.chance(0.35);
   const windows = [];
+  const useKits = !!modules;
 
   for (const b of design.blocks) {
     const h = b.y1 - b.y0, w = b.x1 - b.x0, d = b.z1 - b.z0;
     const my = (b.y0 + b.y1) / 2;
     const facade = b.tech ? M.CONCRETE : M.FACADE;
     const col = b.tech ? 0x8a8a8a : tintBase;
-    // стены
-    batch.add(wallPlane((b.x0 + b.x1) / 2, my, b.z0, w, h, Math.PI, 3, col), facade);
-    batch.add(wallPlane((b.x0 + b.x1) / 2, my, b.z1, w, h, 0, 3, col), facade);
-    // торцы — глухие или с мозаикой
     const endMat = b.tech ? M.CONCRETE : (hasMosaic && b.y0 === 0 && d < w * 0.85 ? M.MOSAIC : (rng.chance(0.5) ? M.CONCRETE : M.FACADE));
-    if (endMat === M.MOSAIC) {
-      batch.add(tint(scaleUV(new THREE.PlaneGeometry(d, h), 1, 1).rotateY(Math.PI / 2).translate(b.x1, my, (b.z0 + b.z1) / 2), 0xffffff), M.MOSAIC);
-      batch.add(tint(scaleUV(new THREE.PlaneGeometry(d, h), 1, 1).rotateY(-Math.PI / 2).translate(b.x0, my, (b.z0 + b.z1) / 2), 0xffffff), M.MOSAIC);
+    if (useKits && !b.tech) {
+      tilePanels(modules, b, 's', col);
+      tilePanels(modules, b, 'n', col);
+      if (endMat === M.MOSAIC) {
+        batch.add(tint(scaleUV(new THREE.PlaneGeometry(d, h), 1, 1).rotateY(Math.PI / 2).translate(b.x1, my, (b.z0 + b.z1) / 2), 0xffffff), M.MOSAIC);
+        batch.add(tint(scaleUV(new THREE.PlaneGeometry(d, h), 1, 1).rotateY(-Math.PI / 2).translate(b.x0, my, (b.z0 + b.z1) / 2), 0xffffff), M.MOSAIC);
+      } else {
+        tilePanels(modules, b, 'e', col);
+        tilePanels(modules, b, 'w', col);
+      }
     } else {
-      batch.add(wallPlane(b.x1, my, (b.z0 + b.z1) / 2, d, h, Math.PI / 2, 3, col), endMat);
-      batch.add(wallPlane(b.x0, my, (b.z0 + b.z1) / 2, d, h, -Math.PI / 2, 3, col), endMat);
+      batch.add(wallPlane((b.x0 + b.x1) / 2, my, b.z0, w, h, Math.PI, 3, col), facade);
+      batch.add(wallPlane((b.x0 + b.x1) / 2, my, b.z1, w, h, 0, 3, col), facade);
+      if (endMat === M.MOSAIC) {
+        batch.add(tint(scaleUV(new THREE.PlaneGeometry(d, h), 1, 1).rotateY(Math.PI / 2).translate(b.x1, my, (b.z0 + b.z1) / 2), 0xffffff), M.MOSAIC);
+        batch.add(tint(scaleUV(new THREE.PlaneGeometry(d, h), 1, 1).rotateY(-Math.PI / 2).translate(b.x0, my, (b.z0 + b.z1) / 2), 0xffffff), M.MOSAIC);
+      } else {
+        batch.add(wallPlane(b.x1, my, (b.z0 + b.z1) / 2, d, h, Math.PI / 2, 3, col), endMat);
+        batch.add(wallPlane(b.x0, my, (b.z0 + b.z1) / 2, d, h, -Math.PI / 2, 3, col), endMat);
+      }
     }
     // крыша
     batch.add(flatPlane(b.x0, b.z0, b.x1, b.z1, b.y1, true, 4, 0x777777), M.ROOF);
@@ -155,10 +193,16 @@ export function buildBuildingGeometry(batch, design, rng, winRng = rng) {
         const tx = winRng.int(0, Math.max(0, Math.floor(w / 3) - 1)), fl = winRng.int(0, Math.max(0, b.floors - 1));
         const wx = b.x0 + tx * 3 + 1.5, wy = b.y0 + fl * F + 1.55;
         const front = winRng.chance(0.5);
-        const g = new THREE.PlaneGeometry(1.45, 1.55);
-        g.rotateY(front ? Math.PI : 0); g.translate(wx, wy, front ? b.z0 - 0.04 : b.z1 + 0.04);
-        batch.add(tint(g, new THREE.Color(0.95, 0.72, 0.28)), M.LAMP);
-        windows.push({ x: wx, y: wy, z: front ? b.z0 : b.z1, nx: 0, nz: front ? -1 : 1, floor: fl });
+        const wz = front ? b.z0 : b.z1;
+        const yaw = front ? Math.PI : 0;
+        if (useKits) {
+          modules.push({ name: 'window_lit', x: wx, y: wy, z: wz + (front ? -0.06 : 0.06), yaw });
+        } else {
+          const g = new THREE.PlaneGeometry(1.45, 1.55);
+          g.rotateY(yaw); g.translate(wx, wy, front ? b.z0 - 0.04 : b.z1 + 0.04);
+          batch.add(tint(g, new THREE.Color(0.95, 0.72, 0.28)), M.LAMP);
+        }
+        windows.push({ x: wx, y: wy, z: wz, nx: 0, nz: front ? -1 : 1, floor: fl });
       }
     }
     // Детали крыши
@@ -175,23 +219,27 @@ export function buildBuildingGeometry(batch, design, rng, winRng = rng) {
   for (const e of design.entrances) {
     const nx = e.nx ?? 0, nz = e.nz ?? -1;
     const yaw = Math.atan2(nx, nz);
-    const recess = new THREE.PlaneGeometry(1.6, 2.4); recess.rotateY(yaw); recess.translate(e.x + nx * 0.02, 1.2, e.z + nz * 0.02);
-    batch.add(tint(recess, 0x080808), M.DARK);
-    const door = new THREE.PlaneGeometry(1.2, 2.1); door.rotateY(yaw); door.translate(e.x + nx * 0.04, 1.1, e.z + nz * 0.04);
-    batch.add(tint(door, 0xffffff), M.DOOR);
-    const canopy = porchAABB(e, 0, 1.7, -1.6, 1.6, 2.55, 2.75);
-    batch.add(boxGeo(canopy.x0, canopy.y0, canopy.z0, canopy.x1, canopy.y1, canopy.z1, 0x9a9a9a), M.CONCRETE);
-    const step = porchAABB(e, 0, 1.5, -1.3, 1.3, 0, 0.18);
-    batch.add(boxGeo(step.x0, step.y0, step.z0, step.x1, step.y1, step.z1, 0x8a8a8a), M.CONCRETE);
-    const w1 = porchAABB(e, 1.4, 1.7, -1.6, -1.3, 0, 2.55);
-    const w2 = porchAABB(e, 1.4, 1.7, 1.3, 1.6, 0, 2.55);
-    batch.add(boxGeo(w1.x0, w1.y0, w1.z0, w1.x1, w1.y1, w1.z1, 0x8a8a8a), M.CONCRETE);
-    batch.add(boxGeo(w2.x0, w2.y0, w2.z0, w2.x1, w2.y1, w2.z1, 0x8a8a8a), M.CONCRETE);
     e.lamp = e.lamp ?? rng.chance(0.55);
-    const lamp = porchAABB(e, 0.7, 1.0, -0.15, 0.15, 2.4, 2.55);
-    batch.add(boxGeo(lamp.x0, lamp.y0, lamp.z0, lamp.x1, lamp.y1, lamp.z1, e.lamp ? new THREE.Color(1.0, 0.82, 0.45) : 0x222222), M.LAMP);
-    const plate = porchAABB(e, 0.02, 0.06, 0.75, 1.05, 1.9, 2.1);
-    batch.add(boxGeo(plate.x0, plate.y0, plate.z0, plate.x1, plate.y1, plate.z1, 0x2a3a6a), M.DARK);
+    if (useKits) {
+      modules.push({ name: 'entrance', x: e.x, y: 0, z: e.z, yaw });
+    } else {
+      const recess = new THREE.PlaneGeometry(1.6, 2.4); recess.rotateY(yaw); recess.translate(e.x + nx * 0.02, 1.2, e.z + nz * 0.02);
+      batch.add(tint(recess, 0x080808), M.DARK);
+      const door = new THREE.PlaneGeometry(1.2, 2.1); door.rotateY(yaw); door.translate(e.x + nx * 0.04, 1.1, e.z + nz * 0.04);
+      batch.add(tint(door, 0xffffff), M.DOOR);
+      const canopy = porchAABB(e, 0, 1.7, -1.6, 1.6, 2.55, 2.75);
+      batch.add(boxGeo(canopy.x0, canopy.y0, canopy.z0, canopy.x1, canopy.y1, canopy.z1, 0x9a9a9a), M.CONCRETE);
+      const step = porchAABB(e, 0, 1.5, -1.3, 1.3, 0, 0.18);
+      batch.add(boxGeo(step.x0, step.y0, step.z0, step.x1, step.y1, step.z1, 0x8a8a8a), M.CONCRETE);
+      const w1 = porchAABB(e, 1.4, 1.7, -1.6, -1.3, 0, 2.55);
+      const w2 = porchAABB(e, 1.4, 1.7, 1.3, 1.6, 0, 2.55);
+      batch.add(boxGeo(w1.x0, w1.y0, w1.z0, w1.x1, w1.y1, w1.z1, 0x8a8a8a), M.CONCRETE);
+      batch.add(boxGeo(w2.x0, w2.y0, w2.z0, w2.x1, w2.y1, w2.z1, 0x8a8a8a), M.CONCRETE);
+      const lamp = porchAABB(e, 0.7, 1.0, -0.15, 0.15, 2.4, 2.55);
+      batch.add(boxGeo(lamp.x0, lamp.y0, lamp.z0, lamp.x1, lamp.y1, lamp.z1, e.lamp ? new THREE.Color(1.0, 0.82, 0.45) : 0x222222), M.LAMP);
+      const plate = porchAABB(e, 0.02, 0.06, 0.75, 1.05, 1.9, 2.1);
+      batch.add(boxGeo(plate.x0, plate.y0, plate.z0, plate.x1, plate.y1, plate.z1, 0x2a3a6a), M.DARK);
+    }
   }
   return { windows };
 }

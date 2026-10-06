@@ -1,15 +1,21 @@
 import { CFG } from '../config.js';
 import { rnd } from '../rng.js';
-import { EntityRenderer, VARIANTS } from './models.js';
+import { makeCrowd } from './actor.js';
 
 // Классы: 1 — безобидные, 2 — непредсказуемые, 3 — агрессивные (в домах), 'arena' — бойцы арены, 'minion' — волны Deathmatch
 export class Population {
-  constructor(scene) {
-    this.renderer = new EntityRenderer(scene, 1100);
+  constructor(scene, kits = null, chars = null) {
+    this.scene = scene;
+    this.renderer = makeCrowd(scene, chars, CFG.arenaMaxAlive);
     this.entities = [];
     this.spawnedTotal = 0;
     this.class1Total = 0;
     this.killed = 0;
+  }
+
+  setChars(chars) {
+    this.renderer.dispose?.(this.scene);
+    this.renderer = makeCrowd(this.scene, chars, CFG.arenaMaxAlive);
   }
 
   clear(filter = () => true) { this.entities = this.entities.filter(e => !filter(e)); }
@@ -18,7 +24,7 @@ export class Population {
 
   spawn(cls, x, y, z, extra = {}) {
     const e = {
-      cls, variant: rnd.int(0, VARIANTS.length - 1), pos: { x, y, z }, yaw: rnd.range(0, Math.PI * 2),
+      cls, variant: rnd.int(0, 4), pos: { x, y, z }, yaw: rnd.range(0, Math.PI * 2),
       hp: cls === 3 ? CFG.class3Hp : cls === 'arena' ? CFG.arenaEntityHp : cls === 'minion' ? 55 : 40,
       state: 'idle', timer: rnd.range(0.5, 3), anim: Math.random(), moving: false, dead: false,
       speed: 0, home: { x, z }, target: null, cooldown: 0, scale: rnd.range(0.92, 1.08), trailIdx: 0, lostTimer: 0,
@@ -70,7 +76,7 @@ export class Population {
       }
       if (e.moving) e.anim = (e.anim + dt * e.speed * 0.55) % 1;
     }
-    this.renderer.update(this.entities);
+    this.renderer.update(this.entities, dt);
   }
 
   // Шаг к точке с коллизией и полом

@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "vite --open",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "bake-kits": "node scripts/bake-kits.mjs",
+    "blender-kits": "/Applications/Blender.app/Contents/MacOS/Blender --background --python blender/export_kits.py",
+    "blender-world": "/Applications/Blender.app/Contents/MacOS/Blender --background --python blender/export_world.py",
+    "blender-chars": "/Applications/Blender.app/Contents/MacOS/Blender --background --python blender/import_mixamo.py"
   },
   "dependencies": {
     "three": "^0.170.0"

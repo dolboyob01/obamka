@@ -2,9 +2,10 @@ import * as THREE from 'three';
 import { CFG } from './config.js';
 import { buildPlayer } from './entities/models.js';
 import { Weapon } from './weapons.js';
+import { makePlayerActor } from './entities/actor.js';
 
 export class Player {
-  constructor(scene, camera) {
+  constructor(scene, camera, kits = null, chars = null) {
     this.scene = scene; this.camera = camera;
     this.pos = new THREE.Vector3(0, 0, 0); // ноги
     this.vy = 0;
@@ -18,7 +19,9 @@ export class Player {
     this.lastDamage = 0; this.animPhase = 0; this.aimTimer = 0;
     this.camDist = CFG.camDist; this.camDistCur = CFG.camDist;
     this.iframes = 0;
-    this.model = buildPlayer(); scene.add(this.model);
+    this.actor = makePlayerActor(chars);
+    this.model = this.actor ? this.actor.root : buildPlayer(kits);
+    scene.add(this.model);
     this.pistol = new Weapon('pistol'); this.minigun = new Weapon('minigun');
     this.weapon = this.pistol;
     this.frozen = false;     // отключить управление (лифт, катсцены)
@@ -29,10 +32,22 @@ export class Player {
     this.flying = false;
   }
 
+  setChars(chars) {
+    if (this.actor) return;
+    const a = makePlayerActor(chars);
+    if (!a) return;
+    this.scene.remove(this.model);
+    this.actor = a;
+    this.model = a.root;
+    this.scene.add(this.model);
+    this.setWeapon(this.weapon?.kind === 'minigun' ? 'minigun' : 'pistol');
+  }
+
   setWeapon(kind) {
     this.weapon = kind === 'minigun' ? this.minigun : this.pistol;
-    this.model.userData.pistol.visible = kind !== 'minigun';
-    this.model.userData.minigun.visible = kind === 'minigun';
+    const u = this.model?.userData;
+    if (u?.pistol) u.pistol.visible = kind !== 'minigun';
+    if (u?.minigun) u.minigun.visible = kind === 'minigun';
   }
 
   teleport(x, y, z, yaw) {
@@ -232,26 +247,39 @@ export class Player {
 
   updateModel(dt) {
     const m = this.model, u = m.userData;
-    m.position.copy(this.pos);
-    m.rotation.y = this.modelYaw;
+    m.position.set(this.pos.x, this.pos.y + (this.actor?.lift || 0), this.pos.z);
+    m.rotation.y = this.modelYaw + (this.actor?.yawOffset ?? 0);
+    if (this.actor) {
+      const spd = this.flying ? Math.hypot(this.vx, this.vy, this.vz) : this.speed;
+      this.actor.setMove(spd, this.sprint, this.grounded || this.flying);
+      this.actor.update(dt);
+      const cr = this.crouch ? 1 : 0;
+      this._cr = (this._cr ?? 0) + (cr - (this._cr ?? 0)) * Math.min(1, dt * 10);
+      const s = this.actor.baseScale;
+      this.actor.root.scale.set(s, s * (1 - 0.22 * this._cr), s);
+      m.visible = !this.hideModel;
+      return;
+    }
+    if (!u?.legL) { m.visible = !this.hideModel; return; }
     const sw = this.moving ? Math.sin(this.animPhase * 2.2) * (this.sprint ? 0.9 : 0.6) : 0;
     u.legL.rotation.x = sw; u.legR.rotation.x = -sw;
     const aiming = this.aimTimer > 0;
     u.armL.rotation.x = aiming ? -1.3 : -sw * 0.8;
     u.armR.rotation.x = aiming ? -1.45 : sw * 0.8;
     u.armR.rotation.z = aiming ? 0 : -0.05;
-    u.gun.rotation.x = aiming ? 0 : 0.6;
-    // присед: опускаем корпус и сгибаем ноги
+    if (u.gun) u.gun.rotation.x = aiming ? 0 : 0.6;
     const cr = this.crouch ? 1 : 0;
     this._cr = (this._cr ?? 0) + (cr - (this._cr ?? 0)) * Math.min(1, dt * 10);
     const drop = -0.55 * this._cr;
-    u.torso.position.y = 1.22 + drop; u.head.position.y = 1.74 + drop; u.cap.position.y = 1.8 + drop;
+    if (u.torso) u.torso.position.y = 1.22 + drop;
+    if (u.head) u.head.position.y = 1.74 + drop;
+    if (u.cap) u.cap.position.y = 1.8 + drop;
     if (u.visor) u.visor.position.y = 1.88 + drop;
     if (u.chain) u.chain.position.y = 1.42 + drop;
     u.armL.position.y = 1.5 + drop; u.armR.position.y = 1.5 + drop;
     u.legL.position.y = 0.9 + drop * 0.5; u.legR.position.y = 0.9 + drop * 0.5;
     u.legL.scale.y = u.legR.scale.y = 1 - 0.45 * this._cr;
-    u.torso.rotation.x = 0.35 * this._cr;
+    if (u.torso) u.torso.rotation.x = 0.35 * this._cr;
     m.visible = !this.hideModel;
   }
 
