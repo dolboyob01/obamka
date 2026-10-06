@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="ru" class="start-open">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ПОДЪЕЗД</title>
+  <link rel="preload" href="/obamka/fonts/BlackDread-RpxPV.otf" as="font" type="font/otf" crossorigin>
+  <style>
+    @font-face {
+      font-family: "Black Dread";
+      src: url("/obamka/fonts/BlackDread-RpxPV.otf") format("opentype");
+      font-display: block;
+    }
+    html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font-family: "Lucida Console", "Courier New", monospace; color: #c8c8c0; user-select: none; }
+    canvas#game { display: block; width: 100vw; height: 100vh; }
+    #ui { position: fixed; inset: 0; pointer-events: none; }
+    .hud { position: absolute; text-shadow: 2px 2px 0 #000; letter-spacing: 1px; }
+    #hp { left: 24px; bottom: 24px; width: 260px; }
+    #hp .bar { height: 14px; background: #1a1a1a; border: 2px solid #3a3a3a; }
+    #hp .fill { height: 100%; background: #8a1a1a; width: 100%; transition: width .15s; }
+    #hp .lbl { font-size: 12px; margin-bottom: 4px; color: #9a9a90; }
+    #ammo { right: 24px; bottom: 24px; font-size: 26px; text-align: right; }
+    #ammo small { display: block; font-size: 12px; color: #8a8a80; }
+    #objective { left: 24px; top: 20px; font-size: 14px; color: #a8a8a0; }
+    #stalker { right: 24px; top: 20px; font-size: 14px; text-align: right; }
+    #stalker b { display: block; font-size: 18px; }
+    #stalker.sleep b { color: #6a8a6a; }
+    #stalker.food b { color: #b0a050; }
+    #stalker.belenka b { color: #d8d0c4; }
+    #stalker.dodep b { color: #9a7ab8; }
+    #stalker.hunt b { color: #d03030; animation: blink .6s infinite alternate; }
+    @keyframes blink { from { opacity: 1 } to { opacity: .35 } }
+    #crosshair { left: 50%; top: 50%; width: 28px; height: 28px; margin: -14px; background: none; opacity: .95; }
+    #crosshair i { position: absolute; background: #f0eee4; box-shadow: 0 0 0 1px rgba(0,0,0,.75); }
+    #crosshair .t, #crosshair .b { left: 50%; width: 2px; height: 8px; margin-left: -1px; }
+    #crosshair .t { top: 0; } #crosshair .b { bottom: 0; }
+    #crosshair .l, #crosshair .r { top: 50%; height: 2px; width: 8px; margin-top: -1px; }
+    #crosshair .l { left: 0; } #crosshair .r { right: 0; }
+    #crosshair.combat i { background: #ffe08a; height: 9px; }
+    #crosshair.combat .l, #crosshair.combat .r { width: 9px; height: 2px; }
+    #prompt { left: 50%; top: 58%; transform: translateX(-50%); font-size: 15px; background: rgba(0,0,0,.55); padding: 6px 12px; border: 1px solid #444; display: none; }
+    #progress { left: 50%; top: 64%; transform: translateX(-50%); width: 220px; height: 10px; border: 2px solid #555; background: #111; display: none; }
+    #progress div { height: 100%; background: #8a6a2a; width: 0; }
+    #notify { left: 50%; top: 28%; transform: translateX(-50%); text-align: center; width: 90%; }
+    .note { font-size: 22px; margin: 6px 0; opacity: 0; transition: opacity .3s; text-shadow: 2px 2px 0 #000; }
+    .note.show { opacity: 1; } .note.danger { color: #e03030; font-size: 28px; } .note.calm { color: #9ab0a0; } .note.info { color: #d8d8c8; }
+    #chasehint { left: 50%; bottom: 14%; transform: translateX(-50%); font-size: 20px; color: #e03030; display: none; letter-spacing: 4px; }
+    #arena { left: 50%; top: 20px; transform: translateX(-50%); font-size: 18px; color: #e05050; display: none; }
+    #bomb { left: 50%; top: 52px; transform: translateX(-50%); font-size: 16px; color: #e0a040; display: none; }
+
+    .overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; background: #000; pointer-events: auto; text-align: center; }
+    .start-open canvas#game { visibility: hidden; }
+    .start-open .hud { visibility: hidden; }
+    .overlay.show { display: flex; }
+    .overlay h1 { font-size: 64px; margin: 0 0 8px; letter-spacing: 12px; color: #d8d8d0; text-shadow: 4px 4px 0 #300; }
+    .overlay h2 { font-size: 28px; margin: 0 0 20px; letter-spacing: 4px; }
+    .overlay p { max-width: 640px; line-height: 1.6; color: #9a9a90; font-size: 14px; margin: 6px 0; }
+    .btn { display: inline-block; margin: 8px; padding: 10px 26px; border: 2px solid #666; background: #111; color: #e0e0d8; font-family: inherit; font-size: 18px; cursor: pointer; letter-spacing: 2px; }
+    .btn:hover { background: #2a1a1a; border-color: #a33; }
+    .row { display: flex; align-items: center; gap: 12px; margin: 6px 0; font-size: 15px; }
+    .row input[type=range] { width: 200px; }
+    #choice h2 { color: #e03030; animation: blink .5s infinite alternate; }
+    #choice .btn { font-size: 22px; padding: 16px 36px; }
+    #choice .timer { font-size: 40px; color: #c8c8c0; margin: 10px; }
+    #start h1 { font-size: 80px; }
+    #start .brand {
+      font-family: "Black Dread", serif;
+      font-size: clamp(120px, 18vw, 180px);
+      line-height: .82;
+      color: #8b0000;
+      letter-spacing: 6px;
+      margin: 0 0 14px;
+      text-shadow: 0 4px 0 #2a0000, 0 0 28px rgba(90, 0, 0, .85);
+    }
+    #gameover h1 { color: #a01010; }
+    .fade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity .4s; }
+  </style>
+  <script type="module" crossorigin src="/obamka/assets/index-Cg6wIO79.js"></script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="ui">
+    <div id="hp" class="hud"><div class="lbl">ЗДОРОВЬЕ</div><div class="bar"><div class="fill"></div></div></div>
+    <div id="ammo" class="hud">8 / 56<small>ПМ</small></div>
+    <div id="objective" class="hud">ЗАМИНИРОВАНО ПОДЪЕЗДОВ: 0</div>
+    <div id="stalker" class="hud sleep">ПРЕСЛЕДОВАТЕЛЬ<b>СПИТ</b></div>
+    <div id="crosshair" class="hud"><i class="t"></i><i class="b"></i><i class="l"></i><i class="r"></i></div>
+    <div id="prompt" class="hud"></div>
+    <div id="progress" class="hud"><div></div></div>
+    <div id="notify" class="hud"></div>
+    <div id="chasehint" class="hud">НЕ ОБОРАЧИВАЙСЯ</div>
+    <div id="arena" class="hud"></div>
+    <div id="bomb" class="hud"></div>
+    <div class="fade" id="fade"></div>
+
+    <div id="start" class="overlay show">
+      <div class="brand">obamka</div>
+      <h1>ПОДЪЕЗД</h1>
+      <h2>тундра. панельки. бесконечность.</h2>
+      <p>Твоя задача — заминировать подъезды. Бомба закладывается просто: присядь в углу любого подъезда и сделай то, что предначертано.</p>
+      <p>WASD — ходить · Space — прыжок / распрыжка · Shift — бежать · C / Ctrl — присесть · Q — полёт под гавваховыми гозе · E — взаимодействие · ЛКМ — стрелять · R — перезарядка · Esc — меню</p>
+      <p style="color:#e03030">Внутри домов тебя ждут. Если увидишь серую тень — беги и не оборачивайся. От Преследователя спасает только лифт. Но это не точно...</p>
+      <button class="btn" id="startBtn">НАЧАТЬ</button>
+    </div>
+
+    <div id="menu" class="overlay">
+      <h2>ПАУЗА</h2>
+      <button class="btn" id="resumeBtn">ПРОДОЛЖИТЬ</button>
+      <button class="btn" id="stalkerBtn">ПРЕСЛЕДОВАТЕЛЬ: ВКЛ</button>
+      <div class="row"><span>Музыка</span><input type="range" id="volMusic" min="0" max="1" step="0.05" value="0.8"></div>
+      <div class="row"><span>Эффекты</span><input type="range" id="volSfx" min="0" max="1" step="0.05" value="0.9"></div>
+      <div class="row"><span>Чувствительность</span><input type="range" id="sens" min="0.5" max="3" step="0.1" value="1"></div>
+      <div class="row"><label><input type="checkbox" id="invertY" checked> Инверсия мыши (Y)</label></div>
+      <p>WASD — ходить · Space — прыжок / распрыжка · Shift — бежать · C / Ctrl — присесть · Q — полёт под гавваховыми гозе · E — действие · ЛКМ — огонь · R — перезарядка</p>
+    </div>
+
+    <div id="choice" class="overlay">
+      <h2>ПРЕСЛЕДОВАТЕЛЬ ИЩЕТ ТЕБЯ</h2>
+      <p>Он уже идёт по твоему следу. Выбирай.</p>
+      <div>
+        <button class="btn" id="stealthBtn">[1] УЙТИ ТИХО</button>
+        <button class="btn" id="dmBtn">[2] DEATHMATCH</button>
+      </div>
+      <p>Тихо: он идёт за тобой с отставанием в несколько секунд. Deathmatch: тебе дадут шестиствольный пулемёт, но на каждого убитого придут двое.</p>
+      <p>Спастись можно только в лифте.</p>
+      <div class="timer" id="choiceTimer">10</div>
+    </div>
+
+    <div id="goze" class="overlay">
+      <h2>Хочешь полетать?</h2>
+      <p>В Красном и Коричневом больше ничего взять нельзя.<br>Только Гавваховый Гозе 60%.</p>
+      <div>
+        <button class="btn" id="gozeYes">[Y] Взять Гозе</button>
+        <button class="btn" id="gozeNo">[N] Уйти</button>
+      </div>
+    </div>
+
+    <div id="gameover" class="overlay">
+      <h1>КОНЕЦ</h1>
+      <h2 id="goReason"></h2>
+      <p id="goStats"></p>
+      <button class="btn" id="restartBtn">ЗАНОВО</button>
+    </div>
+  </div>
+</body>
+</html>
