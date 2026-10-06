@@ -737,7 +737,6 @@ export class Game {
       pulse = Math.max(pulse, Math.max(0, 1 - d / 12) * 0.8);
     }
     u.pulse.value = pulse;
-    this.postfx.mood = this.stalker.state === 'hunt' ? 1 : (this.player.flying ? 2 : 0);
     this.postfx.render(this.scene, this.camera, dt);
   }
 }

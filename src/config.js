@@ -1,7 +1,7 @@
 // Центральная настройка баланса и мира. Все числа — в метрах / секундах / процентах HP.
 export const CFG = {
   // Рендер
-  pixelScale: 0.48,        // bitmap в духе Obra Dinn
+  pixelScale: 0.62,        // чуть выше разрешение — меньше «роблокс»
   fov: 68,
   camDist: 4.6,
   camDistCombat: 6.0,
